@@ -62,7 +62,7 @@ show it in File Explorer, or untick the ones you want to keep.
 </p>
 
 - Windows 11 Fluent look that follows your light / dark theme and accent colour.
-- Progress on the taskbar button while scanning and cleaning.
+- Progress in the window and on the taskbar button while scanning and cleaning.
 - Finds your Downloads folder even if you moved it to another drive.
 - 7 languages, switch any time from the sidebar — no restart needed:
   English, 简体中文, 繁體中文, 日本語, Русский, Español, हिन्दी.
