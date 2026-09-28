@@ -11,8 +11,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <AssemblyTitle>SweeplyForWindows</AssemblyTitle>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <!-- Fluent theme (ThemeMode) is marked experimental in .NET 9. -->
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
 
 </Project>

@@ -12,7 +12,7 @@
       so the words themselves are never published. One entry per line,
       case-insensitive substring match, '#' starts a comment.
     - No private-network IPv4 addresses.
-    - Only known file types; images only under docs/; no file over 5 MB.
+    - Only known file types; images only under docs/ or the app's Assets/; no file over 5 MB.
 
   Exit code 0 = clean, 1 = something must be fixed first.
 #>
@@ -75,7 +75,9 @@ foreach ($f in $files) {
     if ($bytes.Length -gt 5MB) { $problems.Add("$f : larger than 5 MB"); continue }
 
     if ($imageExt -contains $ext) {
-        if (-not $f.StartsWith('docs/')) { $problems.Add("$f : images are only allowed under docs/") }
+        if (-not ($f.StartsWith('docs/') -or $f.StartsWith('src/SweeplyForWindows/Assets/'))) {
+            $problems.Add("$f : images are only allowed under docs/ or src/SweeplyForWindows/Assets/")
+        }
         continue
     }
     if (($textExt -notcontains $ext) -and ($name -ne 'LICENSE')) {

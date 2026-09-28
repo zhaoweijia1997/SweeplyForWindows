@@ -25,6 +25,15 @@ public partial class App : Application
             return;
         }
 
+        // SweeplyForWindows.exe --render-icon <folder>   (writes icon.png and app.ico)
+        if (e.Args.Length == 2 && e.Args[0] == "--render-icon")
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            IconRenderer.RenderAll(e.Args[1]);
+            Shutdown(0);
+            return;
+        }
+
         new MainWindow().Show();
     }
 }
