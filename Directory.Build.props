@@ -1,0 +1,14 @@
+<Project>
+  <!-- Shared by every project in the repo. -->
+  <PropertyGroup>
+    <Version>0.0.1</Version>
+    <Product>SweeplyForWindows</Product>
+    <Authors>JoyJar</Authors>
+    <Company>JoyJar</Company>
+    <Copyright>Copyright (c) 2026 JoyJar</Copyright>
+
+    <!-- Reproducible builds: no build-machine paths end up in the binaries. -->
+    <Deterministic>true</Deterministic>
+    <PathMap>$(MSBuildThisFileDirectory)=/_/</PathMap>
+  </PropertyGroup>
+</Project>
