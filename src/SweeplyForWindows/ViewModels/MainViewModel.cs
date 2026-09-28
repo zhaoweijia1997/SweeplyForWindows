@@ -23,7 +23,10 @@ public sealed class MainViewModel : ObservableObject
     private bool _isBusy;
     private bool _hasScanned;
     private string? _statusMessage;
-    private double _taskbarProgress;
+    private double _progress;
+    private string _progressKey = "clean.scanProgress";
+    private int _progressDone;
+    private int _progressTotal;
     private TaskbarItemProgressState _taskbarState = TaskbarItemProgressState.None;
 
     public MainViewModel(KnownPaths paths, Settings settings)
@@ -114,11 +117,14 @@ public sealed class MainViewModel : ObservableObject
 
     public bool CanClean => !IsBusy && SelectedCount > 0;
 
-    public double TaskbarProgress
+    /// <summary>0..1, shown in the window footer and on the taskbar button.</summary>
+    public double Progress
     {
-        get => _taskbarProgress;
-        private set => SetField(ref _taskbarProgress, value);
+        get => _progress;
+        private set => SetField(ref _progress, value);
     }
+
+    public string ProgressText => Loc.Instance.Format(_progressKey, _progressDone, _progressTotal);
 
     public TaskbarItemProgressState TaskbarState
     {
@@ -144,14 +150,14 @@ public sealed class MainViewModel : ObservableObject
         var categories = AllCategories.ToList();
         foreach (var c in categories) c.IsScanning = true;
         TaskbarState = TaskbarItemProgressState.Normal;
-        TaskbarProgress = 0;
+        ReportProgress("clean.scanProgress", 0, categories.Count);
 
         for (int i = 0; i < categories.Count; i++)
         {
             var c = categories[i];
             var scan = await Task.Run(() => Scanner.Scan(c.Category, DateTime.UtcNow));
             c.SetScan(scan);
-            TaskbarProgress = (i + 1) / (double)categories.Count;
+            ReportProgress("clean.scanProgress", i + 1, categories.Count);
         }
 
         HasScanned = true;
@@ -172,11 +178,11 @@ public sealed class MainViewModel : ObservableObject
         if (!ok) return;
 
         IsBusy = true;
-        StatusMessage = Loc.Instance["clean.cleaning"];
+        StatusMessage = null;
         TaskbarState = TaskbarItemProgressState.Normal;
-        TaskbarProgress = 0;
+        ReportProgress("clean.progress", 0, selection.Count);
         IntPtr owner = OwnerHandle?.Invoke() ?? IntPtr.Zero;
-        var progress = new Progress<(int Done, int Total)>(p => TaskbarProgress = p.Done / (double)p.Total);
+        var progress = new Progress<(int Done, int Total)>(p => ReportProgress("clean.progress", p.Done, p.Total));
 
         // The shell's Recycle Bin operation may show a warning window: run it on an STA thread.
         var outcome = await RunOnStaThread(() => Cleaner.Clean(selection, new ShellRecycleBin(owner), DateTime.UtcNow, progress));
@@ -189,6 +195,15 @@ public sealed class MainViewModel : ObservableObject
         IsBusy = false;
 
         await ScanAsync(keepMessage: true);
+    }
+
+    private void ReportProgress(string key, int done, int total)
+    {
+        _progressKey = key;
+        _progressDone = done;
+        _progressTotal = total;
+        Progress = total == 0 ? 0 : done / (double)total;
+        OnPropertyChanged(nameof(ProgressText));
     }
 
     private static Task<T> RunOnStaThread<T>(Func<T> work)

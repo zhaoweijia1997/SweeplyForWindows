@@ -7,7 +7,7 @@
         Icon="Assets/app.ico"
         WindowStartupLocation="CenterScreen">
     <Window.TaskbarItemInfo>
-        <TaskbarItemInfo ProgressState="{Binding TaskbarState}" ProgressValue="{Binding TaskbarProgress}"/>
+        <TaskbarItemInfo ProgressState="{Binding TaskbarState}" ProgressValue="{Binding Progress}"/>
     </Window.TaskbarItemInfo>
 
     <Window.Resources>
@@ -207,8 +207,18 @@
                                     <TextBlock Text="{Binding SelectedText}" FontWeight="SemiBold" FontSize="15"/>
                                     <TextBlock Text="{Binding FoundText}" Margin="20,0,0,0" FontSize="15" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                 </StackPanel>
-                                <TextBlock Style="{StaticResource Secondary}" FontSize="12" Margin="0,3,0,0"
-                                           Text="{Binding [clean.note], Source={x:Static loc:Loc.Instance}}"/>
+                                <Grid Margin="0,3,0,0">
+                                    <TextBlock Style="{StaticResource Secondary}" FontSize="12"
+                                               Text="{Binding [clean.note], Source={x:Static loc:Loc.Instance}}"
+                                               Visibility="{Binding IsBusy, Converter={StaticResource FalseVisibility}}"/>
+                                    <!-- While scanning or moving: the same line shows progress, so the footer keeps its height. -->
+                                    <StackPanel Orientation="Horizontal"
+                                                Visibility="{Binding IsBusy, Converter={StaticResource TrueVisibility}}">
+                                        <ProgressBar Width="240" Minimum="0" Maximum="1" Value="{Binding Progress, Mode=OneWay}" VerticalAlignment="Center"/>
+                                        <TextBlock Style="{StaticResource Secondary}" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
+                                                   Text="{Binding ProgressText}"/>
+                                    </StackPanel>
+                                </Grid>
                             </StackPanel>
                             <Button Grid.Column="1" Style="{DynamicResource AccentButtonStyle}" Padding="18,7" MinWidth="150"
                                     Content="{Binding [clean.moveToBin], Source={x:Static loc:Loc.Instance}}"
