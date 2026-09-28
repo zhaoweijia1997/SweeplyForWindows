@@ -1,7 +1,7 @@
 <Project>
   <!-- Shared by every project in the repo. -->
   <PropertyGroup>
-    <Version>0.0.1</Version>
+    <Version>0.1.0</Version>
     <Product>SweeplyForWindows</Product>
     <Authors>JoyJar</Authors>
     <Company>JoyJar</Company>

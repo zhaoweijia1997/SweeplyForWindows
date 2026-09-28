@@ -16,34 +16,57 @@
 
 <p align="center"><b>English</b> · <a href="README.zh-CN.md">简体中文</a></p>
 
-> **Status: early preview (0.0.1).** This build only opens a window — cleaning arrives in 0.1.
-> Watch the [releases](../../releases) to get it when it's ready.
+SweeplyForWindows finds caches, temporary files and developer leftovers you can safely remove,
+shows you exactly what they are, and never deletes anything until you choose to.
 
 <p align="center">
-  <img src="docs/screenshots/main-light.png" width="420" alt="SweeplyForWindows, light theme">
-  <img src="docs/screenshots/main-dark.png" width="420" alt="SweeplyForWindows, dark theme">
+  <img src="docs/screenshots/clean-en-light.png" width="760" alt="SweeplyForWindows showing cleanup categories and their sizes">
 </p>
 
-## What 0.1 will do
+> **Status: early preview (0.1).** Cleaning works; more categories and a system overview are coming.
 
-- Find temporary files, app caches, crash dumps, error reports and developer caches
-  (npm, pip, NuGet, Gradle, Yarn) that are safe to remove.
-- Explain every category: what it is, and whether Windows or the app will recreate it.
-- Expand any category to see every folder, open it in File Explorer, or untick what you want to keep.
+## What it finds
+
+**Windows**
+- Temporary files programs left behind (only items untouched for a day)
+- Crash dumps and Windows error reports
+
+**Browsers**
+- Microsoft Edge and Google Chrome disk caches — history, passwords and sign-ins are kept
+
+**Developer tools**
+- npm, pip, NuGet, Yarn and Gradle caches
+
+**Downloads**
+- Installers (.exe, .msi, .msix) in your Downloads folder — not selected by default
+
+Each category explains what it is and whether it comes back. Expand it to see every item,
+show it in File Explorer, or untick the ones you want to keep.
 
 ## Safety first
 
-- **Nothing is deleted without you.** Sweeply only scans until you pick what to clean.
-- **Everything goes to the Recycle Bin**, so you can restore it.
-- **Only this PC's own disks.** USB and network drives are never scanned or touched.
-- **Running apps are left alone.** Caches of apps that are open are skipped.
+- **Nothing is deleted without you.** Sweeply only scans until you pick what to clean and confirm.
+- **Everything goes to the Recycle Bin**, so you can restore it. If something is too big for the
+  Recycle Bin, Windows asks you first instead of deleting it for good.
+- **Checked twice.** Right before moving, each item is checked again: still inside its category's
+  folder, not a link to somewhere else, on this PC's own disk, and its app not running.
+  Temporary files must also still be untouched for a day.
+- **Only this PC's own disks.** USB sticks and network drives are never touched.
+- **Browsers are left alone while they're open**, and files in use are skipped.
 - **Works offline.** No network requests, no analytics, no accounts.
 
 ## Made for Windows
 
-- Follows the Windows light / dark theme with the Windows 11 Fluent look.
-- Shows progress on the taskbar button.
-- 7 languages: English, 简体中文, 繁體中文, 日本語, Русский, Español, हिन्दी.
+<p align="center">
+  <img src="docs/screenshots/clean-en-dark.png" width="760" alt="SweeplyForWindows in dark mode">
+</p>
+
+- Windows 11 Fluent look that follows your light / dark theme and accent colour.
+- Progress on the taskbar button while scanning and cleaning.
+- Finds your Downloads folder even if you moved it to another drive.
+- 7 languages, switch any time from the sidebar — no restart needed:
+  English, 简体中文, 繁體中文, 日本語, Русский, Español, हिन्दी.
+  Translations other than English and Chinese would love a review from native speakers.
 
 ## Install
 
@@ -64,8 +87,10 @@ dotnet test
 powershell -ExecutionPolicy Bypass -File tools\release.ps1   # zip in artifacts\
 ```
 
-`SweeplyForWindows.exe --snapshot <folder>` renders the window to PNG in light and dark
-without capturing the screen — that is how the screenshots above are made.
+- `SweeplyForWindows.exe --snapshot <folder>` renders every page with made-up results, in every
+  language, light and dark — without capturing the screen. That's how the screenshots here are made.
+- `SweeplyForWindows.exe --scan-report <file>` scans read-only and writes each category's status,
+  item count and size, without any paths — handy to attach to a bug report.
 
 ## Support SweeplyForWindows
 

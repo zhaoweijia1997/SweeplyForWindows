@@ -18,6 +18,10 @@
 
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
+    <!-- Shared with the README: one copy of each image, in docs/. -->
+    <Resource Include="..\..\docs\icon.png" Link="Assets\icon.png" />
+    <Resource Include="..\..\docs\donate\*.png" Link="Assets\donate\%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Localization\*.json" LogicalName="SweeplyForWindows.Localization.%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>
