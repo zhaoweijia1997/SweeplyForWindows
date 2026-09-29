@@ -45,15 +45,81 @@ public static class CategoryCatalog
             {
                 Id = "edge-cache",
                 Group = CategoryGroup.Browsers,
-                Roots = BrowserCacheRoots(Path.Combine(local, "Microsoft", "Edge", "User Data")),
+                // Beta, Dev and Canary run as msedge too.
+                Roots = BrowserCacheRoots(
+                    Path.Combine(local, "Microsoft", "Edge", "User Data"),
+                    Path.Combine(local, "Microsoft", "Edge Beta", "User Data"),
+                    Path.Combine(local, "Microsoft", "Edge Dev", "User Data"),
+                    Path.Combine(local, "Microsoft", "Edge SxS", "User Data")),
                 BlockingProcesses = new[] { "msedge" },
             },
             new()
             {
                 Id = "chrome-cache",
                 Group = CategoryGroup.Browsers,
-                Roots = BrowserCacheRoots(Path.Combine(local, "Google", "Chrome", "User Data")),
+                Roots = BrowserCacheRoots(
+                    Path.Combine(local, "Google", "Chrome", "User Data"),
+                    Path.Combine(local, "Google", "Chrome Beta", "User Data"),
+                    Path.Combine(local, "Google", "Chrome Dev", "User Data"),
+                    Path.Combine(local, "Google", "Chrome SxS", "User Data")),
                 BlockingProcesses = new[] { "chrome" },
+            },
+            new()
+            {
+                Id = "firefox-cache",
+                Group = CategoryGroup.Browsers,
+                Roots = FirefoxCacheRoots(Path.Combine(local, "Mozilla", "Firefox", "Profiles")),
+                BlockingProcesses = new[] { "firefox" },
+            },
+            new()
+            {
+                Id = "brave-cache",
+                Group = CategoryGroup.Browsers,
+                Roots = BrowserCacheRoots(Path.Combine(local, "BraveSoftware", "Brave-Browser", "User Data")),
+                BlockingProcesses = new[] { "brave" },
+            },
+            new()
+            {
+                Id = "vivaldi-cache",
+                Group = CategoryGroup.Browsers,
+                Roots = BrowserCacheRoots(Path.Combine(local, "Vivaldi", "User Data")),
+                BlockingProcesses = new[] { "vivaldi" },
+            },
+            new()
+            {
+                // Opera and Opera GX: the whole folder is the profile, and the cache is kept under Local AppData.
+                Id = "opera-cache",
+                Group = CategoryGroup.Browsers,
+                Roots = new[] { "Opera Stable", "Opera GX Stable" }
+                    .Select(name => Path.Combine(local, "Opera Software", name))
+                    .SelectMany(dir => ProfileCaches(dir).Concat(BrowserCacheRoots(dir)))
+                    .ToList(),
+                BlockingProcesses = new[] { "opera" },
+            },
+            new()
+            {
+                Id = "yandex-cache",
+                Group = CategoryGroup.Browsers,
+                Roots = BrowserCacheRoots(Path.Combine(local, "Yandex", "YandexBrowser", "User Data")),
+                BlockingProcesses = new[] { "browser" }, // Yandex Browser's program is browser.exe
+            },
+            new()
+            {
+                // 360 Secure Browser, 360 Speed Browser and 360 Speed Browser X.
+                Id = "360-cache",
+                Group = CategoryGroup.Browsers,
+                Roots = BrowserCacheRoots(
+                    Path.Combine(p.Roaming, "360se6", "User Data"),
+                    Path.Combine(local, "360Chrome", "Chrome", "User Data"),
+                    Path.Combine(local, "360ChromeX", "Chrome", "User Data")),
+                BlockingProcesses = new[] { "360se", "360chrome", "360ChromeX" },
+            },
+            new()
+            {
+                Id = "qqbrowser-cache",
+                Group = CategoryGroup.Browsers,
+                Roots = BrowserCacheRoots(Path.Combine(local, "Tencent", "QQBrowser", "User Data")),
+                BlockingProcesses = new[] { "QQBrowser" },
             },
 
             // ---- Chat apps (skipped while the app runs; chat history itself is never offered) ----
@@ -147,19 +213,41 @@ public static class CategoryCatalog
         };
     }
 
-    /// <summary>The disk caches inside every Chromium profile folder (Default, Profile 1, ...).</summary>
-    private static IReadOnlyList<string> BrowserCacheRoots(string userData)
+    /// <summary>The disk caches inside every Chromium profile folder (Default, Profile 1, ...) of each "User Data" folder.</summary>
+    private static IReadOnlyList<string> BrowserCacheRoots(params string[] userDataFolders)
     {
         var roots = new List<string>();
-        if (!Directory.Exists(userData)) return roots;
-        foreach (string profile in Directory.EnumerateDirectories(userData))
+        foreach (string userData in userDataFolders)
         {
-            string name = Path.GetFileName(profile);
-            if (name != "Default" && !name.StartsWith("Profile ", StringComparison.Ordinal) && name != "Guest Profile")
-                continue;
-            roots.Add(Path.Combine(profile, "Cache"));
-            roots.Add(Path.Combine(profile, "Code Cache"));
-            roots.Add(Path.Combine(profile, "GPUCache"));
+            if (!Directory.Exists(userData)) continue;
+            foreach (string profile in Directory.EnumerateDirectories(userData))
+            {
+                string name = Path.GetFileName(profile);
+                if (name != "Default" && !name.StartsWith("Profile ", StringComparison.Ordinal) && name != "Guest Profile")
+                    continue;
+                roots.AddRange(ProfileCaches(profile));
+            }
+        }
+        return roots;
+    }
+
+    /// <summary>A Chromium profile's disk caches: pages and images, compiled scripts, graphics.</summary>
+    private static IEnumerable<string> ProfileCaches(string profile) => new[]
+    {
+        Path.Combine(profile, "Cache"),
+        Path.Combine(profile, "Code Cache"),
+        Path.Combine(profile, "GPUCache"),
+    };
+
+    /// <summary>Firefox keeps each profile's disk cache under Local AppData, apart from the profile itself.</summary>
+    private static IReadOnlyList<string> FirefoxCacheRoots(string profiles)
+    {
+        var roots = new List<string>();
+        if (!Directory.Exists(profiles)) return roots;
+        foreach (string profile in Directory.EnumerateDirectories(profiles))
+        {
+            roots.Add(Path.Combine(profile, "cache2"));
+            roots.Add(Path.Combine(profile, "startupCache"));
         }
         return roots;
     }

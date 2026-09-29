@@ -13,6 +13,11 @@ public sealed class CategoryViewModel : ObservableObject
     {
         ["msedge"] = "Microsoft Edge",
         ["chrome"] = "Google Chrome",
+        ["firefox"] = "Mozilla Firefox",
+        ["brave"] = "Brave",
+        ["vivaldi"] = "Vivaldi",
+        ["opera"] = "Opera",
+        ["browser"] = "Yandex Browser",
         ["studio64"] = "Android Studio",
         ["idea64"] = "IntelliJ IDEA",
     };
@@ -25,6 +30,7 @@ public sealed class CategoryViewModel : ObservableObject
 
     private readonly Action _selectionChanged;
     private readonly Action<string> _exclude;
+    private readonly bool _presentAtStart;
     private CategoryScan? _scan;
     private bool _isSelected;
     private bool _isExpanded;
@@ -37,6 +43,7 @@ public sealed class CategoryViewModel : ObservableObject
         Category = category;
         _selectionChanged = selectionChanged;
         _exclude = exclude;
+        _presentAtStart = Scanner.IsPresent(category);
         ShowAllCommand = new RelayCommand(_ =>
         {
             _showAll = true;
@@ -47,6 +54,9 @@ public sealed class CategoryViewModel : ObservableObject
 
     public CleanupCategory Category { get; }
     public string Id => Category.Id;
+
+    /// <summary>Hidden when the app it belongs to is not on this PC (none of its folders exist).</summary>
+    public bool IsShown => _scan is null ? _presentAtStart : _scan.Status != ScanStatus.NotInstalled;
 
     public string Name => Loc.Instance[$"cat.{Id}.name"];
     public string Description => Loc.Instance[$"cat.{Id}.desc"];

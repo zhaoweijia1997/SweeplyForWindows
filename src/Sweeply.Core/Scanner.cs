@@ -12,6 +12,8 @@ public enum ScanStatus
     NothingFound,
     /// <summary>An app that owns these files is running, so the category was not scanned.</summary>
     BlockedByRunningApp,
+    /// <summary>None of the category's folders exist: its app is not on this PC.</summary>
+    NotInstalled,
 }
 
 public sealed record CategoryScan(
@@ -49,6 +51,8 @@ public static class Scanner
         IReadOnlyCollection<string>? excluded = null)
     {
         isRunning ??= Processes.IsRunning;
+        if (!IsPresent(category))
+            return new CategoryScan(category, Array.Empty<CleanupItem>(), ScanStatus.NotInstalled);
         foreach (string process in category.BlockingProcesses)
         {
             if (isRunning(process))
@@ -99,6 +103,9 @@ public static class Scanner
             Excluded = excludedCount,
         };
     }
+
+    /// <summary>At least one of the category's folders exists (its app is on this PC).</summary>
+    public static bool IsPresent(CleanupCategory category) => category.Roots.Any(Directory.Exists);
 
     internal static bool Matches(CleanupCategory category, FileSystemInfo entry) => category.Kind switch
     {

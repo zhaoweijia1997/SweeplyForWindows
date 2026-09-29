@@ -33,7 +33,8 @@ shows you exactly what they are, and never deletes anything until you choose to.
 - Crash dumps and Windows error reports
 
 **Browsers**
-- Microsoft Edge and Google Chrome disk caches — history, passwords and sign-ins are kept
+- Disk caches of Microsoft Edge, Google Chrome, Firefox, Brave, Vivaldi, Opera, Yandex Browser,
+  360 Browser and QQ Browser — history, passwords and sign-ins are kept
 
 **Chat apps**
 - WeChat (current and older versions): cache and logs; chat pictures, videos and received files
@@ -45,7 +46,7 @@ shows you exactly what they are, and never deletes anything until you choose to.
 **Downloads**
 - Installers (.exe, .msi, .msix) in your Downloads folder — not selected by default
 
-Each category explains what it is and whether it comes back. Expand it to see every item,
+Apps that are not on your PC are not shown. Each category explains what it is and whether it comes back. Expand it to see every item,
 show it in File Explorer, or untick the ones you want to keep.
 
 ## Safety first

@@ -72,13 +72,24 @@ public class ScannerTests
     }
 
     [Fact]
-    public void Missing_folders_mean_nothing_found()
+    public void Missing_folders_mean_the_app_is_not_installed()
     {
         var cat = new CleanupCategory
         {
             // A local path that doesn't exist (a drive letter like Z: may be a disconnected network share and hang).
             Id = "m", Group = CategoryGroup.Developer, Roots = new[] { Path.Combine(Path.GetTempPath(), "SweeplyTests", Guid.NewGuid().ToString("N")) },
+            BlockingProcesses = new[] { "app" },
         };
+        // Not "the app is running" either: there is nothing of it here to clean.
+        Assert.Equal(ScanStatus.NotInstalled, Scanner.Scan(cat, Now, _ => true).Status);
+        Assert.False(Scanner.IsPresent(cat));
+    }
+
+    [Fact]
+    public void An_existing_but_empty_folder_means_nothing_found()
+    {
+        using var t = new TestFolder();
+        var cat = new CleanupCategory { Id = "e", Group = CategoryGroup.Developer, Roots = new[] { t.Dir("empty") } };
         Assert.Equal(ScanStatus.NothingFound, Scanner.Scan(cat, Now, NothingRuns).Status);
     }
 

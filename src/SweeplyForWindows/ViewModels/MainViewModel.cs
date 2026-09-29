@@ -16,6 +16,20 @@ public sealed class GroupViewModel : ObservableObject
     public CategoryGroup Group { get; }
     public string Name => Loc.Instance[$"clean.group.{Group}"];
     public ObservableCollection<CategoryViewModel> Categories { get; } = new();
+
+    /// <summary>Hidden when none of its apps are on this PC.</summary>
+    public bool IsShown => Categories.Any(c => c.IsShown);
+
+    public void Add(CategoryViewModel category)
+    {
+        Categories.Add(category);
+        category.PropertyChanged += (_, e) =>
+        {
+            if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(CategoryViewModel.IsShown))
+                OnPropertyChanged(nameof(IsShown));
+        };
+    }
+
     public void Relocalize() => OnPropertyChanged(nameof(Name));
 }
 
@@ -55,7 +69,7 @@ public sealed class MainViewModel : ObservableObject
             if (group is null) Groups.Add(group = new GroupViewModel(category.Group));
             CategoryViewModel? vm = null;
             vm = new CategoryViewModel(category, OnSelectionChanged, path => _ = ExcludeItemAsync(vm!, path));
-            group.Categories.Add(vm);
+            group.Add(vm);
         }
         foreach (string path in _settings.ExcludedFolders) ExcludedPaths.Add(path);
 
@@ -587,7 +601,12 @@ public sealed class MainViewModel : ObservableObject
         };
         foreach (var c in AllCategories)
         {
-            if (!samples.TryGetValue(c.Id, out var s)) continue;
+            if (!samples.TryGetValue(c.Id, out var s))
+            {
+                // Only the sample apps, whatever is installed on the PC making the screenshots.
+                c.SetScan(new CategoryScan(c.Category, Array.Empty<CleanupItem>(), ScanStatus.NotInstalled));
+                continue;
+            }
             c.SetScan(new CategoryScan(c.Category, s.Items, s.Status, s.Blocking) { Excluded = c.Id == "temp-files" ? 1 : 0 });
         }
         ExcludedPaths.Clear();
