@@ -53,8 +53,11 @@ public sealed class MainViewModel : ObservableObject
         {
             var group = Groups.FirstOrDefault(g => g.Group == category.Group);
             if (group is null) Groups.Add(group = new GroupViewModel(category.Group));
-            group.Categories.Add(new CategoryViewModel(category, OnSelectionChanged));
+            CategoryViewModel? vm = null;
+            vm = new CategoryViewModel(category, OnSelectionChanged, path => _ = ExcludeItemAsync(vm!, path));
+            group.Categories.Add(vm);
         }
+        foreach (string path in _settings.ExcludedFolders) ExcludedPaths.Add(path);
 
         ScanCommand = new RelayCommand(async _ => await ScanAsync(), () => !IsBusy && !IsReviewing);
         CleanCommand = new RelayCommand(_ => OpenReview(), () => CanClean);
@@ -63,6 +66,14 @@ public sealed class MainViewModel : ObservableObject
         ExportReviewCommand = new RelayCommand(_ => ExportReview(), () => IsReviewing);
         UndoLastCommand = new RelayCommand(async _ => { if (_lastRecord is not null) await UndoAsync(_lastRecord); }, () => CanUndoLast);
         RefreshHistory();
+        AddExclusionCommand = new RelayCommand(_ =>
+        {
+            if (PickFolder?.Invoke() is string folder) _ = ChangeExclusionsAsync(() => AddExclusion(folder), null);
+        });
+        RemoveExclusionCommand = new RelayCommand(p =>
+        {
+            if (p is string path) _ = ChangeExclusionsAsync(() => ExcludedPaths.Remove(path), null);
+        });
         OpenUrlCommand = new RelayCommand(p => OpenUrl(p as string));
         Loc.Instance.LanguageChanged += Relocalize;
         _confirmDelay.Tick += (_, _) =>
@@ -104,6 +115,20 @@ public sealed class MainViewModel : ObservableObject
 
     /// <summary>Asks where to save the list (suggested file name); null when cancelled. Set by the window.</summary>
     public Func<string, string?>? PickSaveFile { get; set; }
+
+    /// <summary>Asks for a folder to add to the "Never clean" list; null when cancelled. Set by the window.</summary>
+    public Func<string?>? PickFolder { get; set; }
+
+    /// <summary>
+    /// Settings page: the "Never clean" list. Scans leave these out, and the check right before
+    /// moving refuses them too, so adding one while a list is already showing is still safe.
+    /// </summary>
+    public ObservableCollection<string> ExcludedPaths { get; } = new();
+
+    public bool HasExclusions => ExcludedPaths.Count > 0;
+
+    public ICommand AddExclusionCommand { get; }
+    public ICommand RemoveExclusionCommand { get; }
 
     /// <summary>
     /// The list of what would be moved is showing. It is the only way to start cleaning: the user sees
@@ -284,12 +309,14 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    public async Task ScanAsync(bool keepMessage = false)
+    public Task ScanAsync(bool keepMessage = false) => ScanAsync(AllCategories.ToList(), keepMessage);
+
+    private async Task ScanAsync(List<CategoryViewModel> categories, bool keepMessage)
     {
         if (IsBusy) return;
         IsBusy = true;
         if (!keepMessage) StatusMessage = null;
-        var categories = AllCategories.ToList();
+        var excluded = _settings.ExcludedFolders.ToArray();
         foreach (var c in categories) c.IsScanning = true;
         TaskbarState = TaskbarItemProgressState.Normal;
         ReportProgress("clean.scanProgress", 0, categories.Count);
@@ -297,7 +324,7 @@ public sealed class MainViewModel : ObservableObject
         for (int i = 0; i < categories.Count; i++)
         {
             var c = categories[i];
-            var scan = await Task.Run(() => Scanner.Scan(c.Category, DateTime.UtcNow));
+            var scan = await Task.Run(() => Scanner.Scan(c.Category, DateTime.UtcNow, null, excluded));
             c.SetScan(scan);
             ReportProgress("clean.scanProgress", i + 1, categories.Count);
         }
@@ -392,7 +419,8 @@ public sealed class MainViewModel : ObservableObject
         var progress = new Progress<(int Done, int Total)>(p => ReportProgress("clean.progress", p.Done, p.Total));
 
         // The shell's Recycle Bin operation may show a warning window: run it on an STA thread.
-        var outcome = await RunOnStaThread(() => Cleaner.Clean(selection, new ShellRecycleBin(owner), DateTime.UtcNow, progress));
+        var excluded = _settings.ExcludedFolders.ToArray();
+        var outcome = await RunOnStaThread(() => Cleaner.Clean(selection, new ShellRecycleBin(owner), DateTime.UtcNow, progress, excluded: excluded));
 
         // Remember exactly what went to the Recycle Bin, so this clean can be undone.
         if (outcome.Moved.Count > 0)
@@ -434,6 +462,35 @@ public sealed class MainViewModel : ObservableObject
         RefreshHistory();
         OnPropertyChanged(nameof(CanUndoLast));
         await ScanAsync(keepMessage: true);
+    }
+
+    /// <summary>The lock button on an item: never offer it again. Only that card is scanned again.</summary>
+    private Task ExcludeItemAsync(CategoryViewModel category, string path)
+    {
+        if (IsReviewing) return Task.CompletedTask;
+        return ChangeExclusionsAsync(() => AddExclusion(path), new List<CategoryViewModel> { category });
+    }
+
+    private void AddExclusion(string path)
+    {
+        string full;
+        try { full = System.IO.Path.GetFullPath(path).TrimEnd('\\', '/'); }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or System.IO.PathTooLongException) { return; }
+        if (full.EndsWith(':')) full += '\\'; // a whole drive
+        if (ExcludedPaths.Any(p => string.Equals(p, full, StringComparison.OrdinalIgnoreCase))) return;
+        ExcludedPaths.Add(full);
+    }
+
+    /// <summary>Saves the list and scans again, so the cards show what can still be cleaned.</summary>
+    private async Task ChangeExclusionsAsync(Action change, List<CategoryViewModel>? rescan)
+    {
+        change();
+        _settings.ExcludedFolders = ExcludedPaths.ToList();
+        _settings.Save();
+        OnPropertyChanged(nameof(HasExclusions));
+        // Nothing to update before the first scan; a scan already running is fine too, because the
+        // check right before moving always reads the current list.
+        if (HasScanned && !IsBusy) await ScanAsync(rescan ?? AllCategories.ToList(), keepMessage: true);
     }
 
     private void RefreshHistory()
@@ -525,8 +582,11 @@ public sealed class MainViewModel : ObservableObject
         foreach (var c in AllCategories)
         {
             if (!samples.TryGetValue(c.Id, out var s)) continue;
-            c.SetScan(new CategoryScan(c.Category, s.Items, s.Status, s.Blocking));
+            c.SetScan(new CategoryScan(c.Category, s.Items, s.Status, s.Blocking) { Excluded = c.Id == "temp-files" ? 1 : 0 });
         }
+        ExcludedPaths.Clear();
+        ExcludedPaths.Add($@"{temp}\my-build-output");
+        OnPropertyChanged(nameof(HasExclusions));
         var first = AllCategories.First(c => c.Id == "temp-files");
         first.IsExpanded = true;
         HasScanned = true;

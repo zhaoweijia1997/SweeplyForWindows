@@ -51,6 +51,14 @@
   "history.partly": "已復原：放回 {0} 個，{1} 個沒能放回",
   "history.empty": "還沒有清理記錄。",
 
+  "exclude.section": "永遠不清理",
+  "exclude.desc": "掃描會跳過這些位置，裡面的東西永遠不會被移走。可以在這裡新增資料夾，也可以在清理頁點某一項旁邊的鎖。",
+  "exclude.add": "新增資料夾…",
+  "exclude.remove": "移除",
+  "exclude.empty": "清單還是空的。",
+  "exclude.item": "永不清理這一項",
+  "exclude.hidden": "已略過 {0} 項：在「永遠不清理」清單裡",
+
   "cat.temp-files.name": "暫存檔案",
   "cat.temp-files.desc": "程式留在暫存資料夾裡的檔案。只列出一天以上沒有變動的；程式需要時會重新建立。",
   "cat.crash-dumps.name": "當機傾印",

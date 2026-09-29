@@ -51,6 +51,14 @@
   "history.partly": "已撤销：放回 {0} 项，{1} 项没能放回",
   "history.empty": "还没有清理记录。",
 
+  "exclude.section": "永远不清理",
+  "exclude.desc": "扫描会跳过这些位置，里面的东西永远不会被移走。可以在这里添加文件夹，也可以在清理页点某一项旁边的锁。",
+  "exclude.add": "添加文件夹…",
+  "exclude.remove": "移除",
+  "exclude.empty": "列表还是空的。",
+  "exclude.item": "永不清理这一项",
+  "exclude.hidden": "已跳过 {0} 项：在“永远不清理”列表里",
+
   "cat.temp-files.name": "临时文件",
   "cat.temp-files.desc": "程序留在临时文件夹里的文件。只列出一天以上没动过的；程序需要时会重新创建。",
   "cat.crash-dumps.name": "崩溃转储",

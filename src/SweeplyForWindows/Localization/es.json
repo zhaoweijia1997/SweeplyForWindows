@@ -51,6 +51,14 @@
   "history.partly": "Deshecha: {0} devueltos, {1} no",
   "history.empty": "Todavía no hay limpiezas.",
 
+  "exclude.section": "No limpiar nunca",
+  "exclude.desc": "El análisis omite estas ubicaciones y nunca se mueve nada de su interior. Añade una carpeta aquí o pulsa el candado junto a un elemento en la página Limpiar.",
+  "exclude.add": "Añadir carpeta…",
+  "exclude.remove": "Quitar",
+  "exclude.empty": "La lista está vacía.",
+  "exclude.item": "No limpiar nunca esto",
+  "exclude.hidden": "Omitidos: {0} en la lista No limpiar nunca",
+
   "cat.temp-files.name": "Archivos temporales",
   "cat.temp-files.desc": "Archivos que los programas dejan en tu carpeta temporal. Solo se muestran los que no se han tocado en un día; los programas crean otros cuando los necesitan.",
   "cat.crash-dumps.name": "Volcados de bloqueo",

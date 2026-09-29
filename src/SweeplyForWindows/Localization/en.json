@@ -51,6 +51,14 @@
   "history.partly": "Undone: {0} put back, {1} not",
   "history.empty": "No cleans yet.",
 
+  "exclude.section": "Never clean",
+  "exclude.desc": "Scans leave these out, and nothing inside them is ever moved. Add a folder here, or press the lock next to an item on the Clean up page.",
+  "exclude.add": "Add folder…",
+  "exclude.remove": "Remove",
+  "exclude.empty": "Nothing on the list yet.",
+  "exclude.item": "Never clean this",
+  "exclude.hidden": "Left out: {0} on the Never clean list",
+
   "cat.temp-files.name": "Temporary files",
   "cat.temp-files.desc": "Files programs leave in your temp folder. Only items untouched for a day are listed; programs create new ones when they need them.",
   "cat.crash-dumps.name": "Crash dumps",

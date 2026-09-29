@@ -168,6 +168,8 @@
                                                                 <StackPanel Grid.Column="1" Opacity="{Binding IsDimmed, Converter={StaticResource DimOpacity}}">
                                                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14"/>
                                                                     <TextBlock Style="{StaticResource Secondary}" Text="{Binding Description}" Margin="0,3,0,0"/>
+                                                                    <TextBlock Style="{StaticResource Secondary}" Text="{Binding ExcludedText}" Margin="0,3,0,0"
+                                                                               Visibility="{Binding HasExcluded, Converter={StaticResource TrueVisibility}}"/>
                                                                     <Expander Header="{Binding ItemsText}" IsExpanded="{Binding IsExpanded}" Margin="-4,6,0,0"
                                                                               Visibility="{Binding HasItems, Converter={StaticResource TrueVisibility}}">
                                                                         <StackPanel>
@@ -180,14 +182,21 @@
                                                                                             <ColumnDefinition Width="*"/>
                                                                                             <ColumnDefinition Width="Auto"/>
                                                                                             <ColumnDefinition Width="Auto"/>
+                                                                                            <ColumnDefinition Width="Auto"/>
                                                                                         </Grid.ColumnDefinitions>
                                                                                         <CheckBox IsChecked="{Binding IsSelected}" MinWidth="0" Margin="0,0,4,0" VerticalAlignment="Center"/>
                                                                                         <TextBlock Grid.Column="1" Text="{Binding Path}" ToolTip="{Binding Path}" TextTrimming="CharacterEllipsis"
                                                                                                    VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                                                                         <TextBlock Grid.Column="2" Text="{Binding SizeText}" Margin="12,0" VerticalAlignment="Center"/>
                                                                                         <Button Grid.Column="3" Style="{StaticResource LinkButton}" Command="{Binding RevealCommand}" VerticalAlignment="Center"
-                                                                                                ToolTip="{Binding [clean.reveal], Source={x:Static loc:Loc.Instance}}">
+                                                                                                ToolTip="{Binding [clean.reveal], Source={x:Static loc:Loc.Instance}}"
+                                                                                                AutomationProperties.Name="{Binding [clean.reveal], Source={x:Static loc:Loc.Instance}}">
                                                                                             <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE838;"/>
+                                                                                        </Button>
+                                                                                        <Button Grid.Column="4" Style="{StaticResource LinkButton}" Command="{Binding ExcludeCommand}" VerticalAlignment="Center" Margin="8,0,0,0"
+                                                                                                ToolTip="{Binding [exclude.item], Source={x:Static loc:Loc.Instance}}"
+                                                                                                AutomationProperties.Name="{Binding [exclude.item], Source={x:Static loc:Loc.Instance}}">
+                                                                                            <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE72E;"/>
                                                                                         </Button>
                                                                                     </Grid>
                                                                                 </DataTemplate>
@@ -359,6 +368,39 @@
                         </ItemsControl>
                         <TextBlock Style="{StaticResource Secondary}" Margin="2,4,0,0" Text="{Binding HistoryNote}"
                                    Visibility="{Binding HistoryNote, Converter={StaticResource TextVisibility}}"/>
+
+                        <!-- Folders and files that are never offered for cleaning. -->
+                        <TextBlock Text="{Binding [exclude.section], Source={x:Static loc:Loc.Instance}}"
+                                   FontWeight="SemiBold" FontSize="14" Margin="2,22,0,2"/>
+                        <TextBlock Style="{StaticResource Secondary}" Margin="2,0,0,8"
+                                   Text="{Binding [exclude.desc], Source={x:Static loc:Loc.Instance}}"/>
+                        <Border Style="{StaticResource Card}" Visibility="{Binding HasExclusions, Converter={StaticResource FalseVisibility}}">
+                            <TextBlock Style="{StaticResource Secondary}" Text="{Binding [exclude.empty], Source={x:Static loc:Loc.Instance}}"/>
+                        </Border>
+                        <ItemsControl ItemsSource="{Binding ExcludedPaths}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource Card}" Padding="16,10">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE72E;" Margin="0,0,10,0"
+                                                       VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding}" ToolTip="{Binding}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="2" Padding="14,5" Margin="12,0,0,0"
+                                                    Command="{Binding DataContext.RemoveExclusionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Content="{Binding [exclude.remove], Source={x:Static loc:Loc.Instance}}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button HorizontalAlignment="Left" Padding="14,6" Margin="0,4,0,0" Command="{Binding AddExclusionCommand}"
+                                Content="{Binding [exclude.add], Source={x:Static loc:Loc.Instance}}"/>
 
                         <TextBlock Text="{Binding [settings.section.background], Source={x:Static loc:Loc.Instance}}"
                                    FontWeight="SemiBold" FontSize="14" Margin="2,22,0,8"/>

@@ -24,16 +24,19 @@ public sealed class CategoryViewModel : ObservableObject
     private const int ListLimit = 200;
 
     private readonly Action _selectionChanged;
+    private readonly Action<string> _exclude;
     private CategoryScan? _scan;
     private bool _isSelected;
     private bool _isExpanded;
     private bool _isScanning;
     private bool _showAll;
 
-    public CategoryViewModel(CleanupCategory category, Action selectionChanged)
+    /// <param name="exclude">Puts a path on the "Never clean" list.</param>
+    public CategoryViewModel(CleanupCategory category, Action selectionChanged, Action<string> exclude)
     {
         Category = category;
         _selectionChanged = selectionChanged;
+        _exclude = exclude;
         ShowAllCommand = new RelayCommand(_ =>
         {
             _showAll = true;
@@ -64,6 +67,11 @@ public sealed class CategoryViewModel : ObservableObject
         : "";
 
     public ICommand ShowAllCommand { get; }
+
+    /// <summary>Items left out of this card because they are on the "Never clean" list.</summary>
+    public bool HasExcluded => _scan?.Excluded > 0;
+
+    public string ExcludedText => HasExcluded ? Loc.Instance.Format("exclude.hidden", _scan!.Excluded) : "";
     public bool CanSelect => _scan?.Status == ScanStatus.Found;
 
     public bool IsSelected
@@ -130,7 +138,7 @@ public sealed class CategoryViewModel : ObservableObject
         _scan = scan;
         _showAll = false;
         Items.Clear();
-        foreach (var item in scan.Items) Items.Add(new ItemViewModel(item, Loc.Instance.Culture, _selectionChanged));
+        foreach (var item in scan.Items) Items.Add(new ItemViewModel(item, Loc.Instance.Culture, _selectionChanged, _exclude));
         _isSelected = CanSelect && (keepSelection ? wasSelected : Category.SelectedByDefault);
         IsScanning = false;
         OnAllPropertiesChanged();
@@ -164,18 +172,22 @@ public sealed class ItemViewModel : ObservableObject
     private bool _isSelected = true;
     private System.Globalization.CultureInfo _culture;
 
-    public ItemViewModel(CleanupItem item, System.Globalization.CultureInfo culture, Action selectionChanged)
+    public ItemViewModel(CleanupItem item, System.Globalization.CultureInfo culture, Action selectionChanged, Action<string>? exclude = null)
     {
         Item = item;
         _culture = culture;
         _selectionChanged = selectionChanged;
         RevealCommand = new RelayCommand(_ => Reveal());
+        ExcludeCommand = new RelayCommand(_ => exclude?.Invoke(Path));
     }
 
     public CleanupItem Item { get; }
     public string Path => Item.Path;
     public string SizeText => SizeFormatter.Format(Item.Bytes, _culture);
     public ICommand RevealCommand { get; }
+
+    /// <summary>Puts this item on the "Never clean" list.</summary>
+    public ICommand ExcludeCommand { get; }
 
     public bool IsSelected
     {

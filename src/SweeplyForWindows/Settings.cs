@@ -13,6 +13,9 @@ public sealed class Settings
 {
     public string? Language { get; set; }
 
+    /// <summary>The "Never clean" list: folders and files that are never offered or moved.</summary>
+    public List<string> ExcludedFolders { get; set; } = new();
+
     /// <summary>Closing the window leaves the app running in the notification area.</summary>
     public bool CloseToTray { get; set; } = true;
 

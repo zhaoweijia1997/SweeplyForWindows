@@ -13,6 +13,8 @@ public enum SafetyVerdict
     AppRunning,
     /// <summary>Something inside changed since the scan and is now too new to remove.</summary>
     TooRecent,
+    /// <summary>On the "Never clean" list, inside something on it, or contains something on it.</summary>
+    Excluded,
 }
 
 /// <summary>
@@ -26,7 +28,8 @@ public static class SafetyCheck
         CleanupCategory category,
         DateTime nowUtc,
         Func<string, bool>? isRunning = null,
-        Func<string, bool>? isLocalFixedDrive = null)
+        Func<string, bool>? isLocalFixedDrive = null,
+        IReadOnlyCollection<string>? excluded = null)
     {
         isRunning ??= Processes.IsRunning;
         isLocalFixedDrive ??= IsLocalFixedDrive;
@@ -47,6 +50,9 @@ public static class SafetyCheck
             if (string.Equals(Path.GetDirectoryName(full), nr, StringComparison.OrdinalIgnoreCase)) { root = nr; break; }
         }
         if (root is null) return SafetyVerdict.OutsideCategory;
+
+        // The list may have changed since the scan; it always wins.
+        if (Exclusions.IsExcluded(full, excluded)) return SafetyVerdict.Excluded;
 
         FileSystemInfo info = Directory.Exists(full) ? new DirectoryInfo(full) : new FileInfo(full);
         if (!info.Exists) return SafetyVerdict.Missing;

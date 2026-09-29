@@ -21,6 +21,9 @@ public sealed record CategoryScan(
     string? BlockingProcess = null)
 {
     public long TotalBytes => Items.Sum(i => i.Bytes);
+
+    /// <summary>Items left out because they are on the "Never clean" list.</summary>
+    public int Excluded { get; init; }
 }
 
 public static class Processes
@@ -42,7 +45,8 @@ public static class Scanner
         AttributesToSkip = 0,
     };
 
-    public static CategoryScan Scan(CleanupCategory category, DateTime nowUtc, Func<string, bool>? isRunning = null)
+    public static CategoryScan Scan(CleanupCategory category, DateTime nowUtc, Func<string, bool>? isRunning = null,
+        IReadOnlyCollection<string>? excluded = null)
     {
         isRunning ??= Processes.IsRunning;
         foreach (string process in category.BlockingProcesses)
@@ -52,6 +56,7 @@ public static class Scanner
         }
 
         var items = new List<CleanupItem>();
+        int excludedCount = 0;
         foreach (string root in category.Roots)
         {
             var dir = new DirectoryInfo(root);
@@ -65,6 +70,11 @@ public static class Scanner
             {
                 if (FileTree.IsReparsePoint(entry)) continue; // never offer or follow links
                 if (!Matches(category, entry)) continue;
+                if (Exclusions.IsExcluded(entry.FullName, excluded))
+                {
+                    excludedCount++;
+                    continue;
+                }
 
                 CleanupItem item;
                 if (entry is FileInfo file)
@@ -84,7 +94,10 @@ public static class Scanner
         }
 
         items.Sort((a, b) => b.Bytes.CompareTo(a.Bytes));
-        return new CategoryScan(category, items, items.Count > 0 ? ScanStatus.Found : ScanStatus.NothingFound);
+        return new CategoryScan(category, items, items.Count > 0 ? ScanStatus.Found : ScanStatus.NothingFound)
+        {
+            Excluded = excludedCount,
+        };
     }
 
     internal static bool Matches(CleanupCategory category, FileSystemInfo entry) => category.Kind switch

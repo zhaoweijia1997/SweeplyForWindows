@@ -18,7 +18,8 @@ public static class Cleaner
         IProgress<(int Done, int Total)>? progress = null,
         CancellationToken cancel = default,
         Func<string, bool>? isRunning = null,
-        Func<string, bool>? isLocalFixedDrive = null)
+        Func<string, bool>? isLocalFixedDrive = null,
+        IReadOnlyCollection<string>? excluded = null)
     {
         int moved = 0;
         long bytes = 0;
@@ -30,7 +31,7 @@ public static class Cleaner
             cancel.ThrowIfCancellationRequested();
             var (item, category) = selection[i];
 
-            var verdict = SafetyCheck.Check(item, category, nowUtc, isRunning, isLocalFixedDrive);
+            var verdict = SafetyCheck.Check(item, category, nowUtc, isRunning, isLocalFixedDrive, excluded);
             if (verdict != SafetyVerdict.Ok)
             {
                 skipped.Add(new SkippedItem(item, verdict));
