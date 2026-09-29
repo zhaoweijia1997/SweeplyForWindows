@@ -199,6 +199,28 @@ internal static class Snapshot
             window.Close();
         }
 
+        // The list shown before anything is moved.
+        foreach (var lang in new[] { "en", "zh-Hans" })
+        {
+            Loc.Instance.SetLanguage(lang);
+            var vm = new MainViewModel(KnownPaths.FromSystem(), new Settings());
+            vm.LoadSample();
+            vm.OpenReview();
+            var window = new MainWindow(vm, scanOnOpen: false)
+            {
+                ThemeMode = ThemeMode.Light,
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -32000,
+                Top = -32000,
+                ShowInTaskbar = false,
+                ShowActivated = false,
+            };
+            window.Show();
+            WaitForAnimations(TimeSpan.FromMilliseconds(900));
+            Save(window, false, Path.Combine(folder, $"review-{lang}-light.png"));
+            window.Close();
+        }
+
         RenderTrayIcons(Path.Combine(folder, "tray-icons.png"));
         foreach (var lang in new[] { "en", "zh-Hans" })
         {

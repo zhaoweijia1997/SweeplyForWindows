@@ -101,8 +101,10 @@ public sealed class CategoryViewModel : ObservableObject
 
     public long SelectedBytes => IsSelected ? Items.Where(i => i.IsSelected).Sum(i => i.Item.Bytes) : 0;
 
-    public IEnumerable<CleanupItem> SelectedItems =>
-        IsSelected ? Items.Where(i => i.IsSelected).Select(i => i.Item) : Enumerable.Empty<CleanupItem>();
+    public IEnumerable<CleanupItem> SelectedItems => SelectedItemViewModels.Select(i => i.Item);
+
+    public IEnumerable<ItemViewModel> SelectedItemViewModels =>
+        IsSelected ? Items.Where(i => i.IsSelected) : Enumerable.Empty<ItemViewModel>();
 
     public string SizeText
     {

@@ -115,7 +115,7 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <Grid Margin="32,26,32,10">
+                    <Grid Margin="32,26,32,10" Visibility="{Binding IsReviewing, Converter={StaticResource FalseVisibility}}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -129,7 +129,8 @@
                                 Content="{Binding ScanButtonText}" Command="{Binding ScanCommand}"/>
                     </Grid>
 
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="32,0,32,16">
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="32,0,32,16"
+                                  Visibility="{Binding IsReviewing, Converter={StaticResource FalseVisibility}}">
                         <StackPanel>
                             <Border Style="{StaticResource Card}" Margin="0,4,0,8"
                                     Background="{DynamicResource SystemFillColorAttentionBackgroundBrush}"
@@ -212,7 +213,8 @@
                     </ScrollViewer>
 
                     <Border Grid.Row="2" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"
-                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" Padding="32,14">
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" Padding="32,14"
+                            Visibility="{Binding IsReviewing, Converter={StaticResource FalseVisibility}}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -239,6 +241,76 @@
                             <Button Grid.Column="1" Style="{DynamicResource AccentButtonStyle}" Padding="18,7" MinWidth="150"
                                     Content="{Binding [clean.moveToBin], Source={x:Static loc:Loc.Instance}}"
                                     Command="{Binding CleanCommand}"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- The list of what would be moved: the only way to start cleaning. Takes the place of the page above. -->
+                    <StackPanel Margin="32,26,32,10" Visibility="{Binding IsReviewing, Converter={StaticResource TrueVisibility}}">
+                        <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [review.title], Source={x:Static loc:Loc.Instance}}"/>
+                        <TextBlock Style="{StaticResource Secondary}" Margin="0,6,0,0"
+                                   Text="{Binding [review.note], Source={x:Static loc:Loc.Instance}}"/>
+                    </StackPanel>
+                    <!-- Can be thousands of lines: a virtualizing list with its own scroll bar draws only what is on screen. -->
+                    <ItemsControl Grid.Row="1" Margin="32,0,32,8" ItemsSource="{Binding ReviewRows}"
+                                  VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                  Visibility="{Binding IsReviewing, Converter={StaticResource TrueVisibility}}">
+                        <ItemsControl.Template>
+                            <ControlTemplate TargetType="ItemsControl">
+                                <ScrollViewer CanContentScroll="True" Focusable="False"
+                                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                                    <ItemsPresenter/>
+                                </ScrollViewer>
+                            </ControlTemplate>
+                        </ItemsControl.Template>
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <TextBlock Text="{Binding Heading}" FontWeight="SemiBold" FontSize="14" Margin="2,14,0,4"
+                                               Visibility="{Binding IsHeading, Converter={StaticResource TrueVisibility}}"/>
+                                    <Grid Margin="8,1,20,1" Visibility="{Binding IsHeading, Converter={StaticResource FalseVisibility}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox IsChecked="{Binding Item.IsSelected}" MinWidth="0" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding Item.Path}" ToolTip="{Binding Item.Path}" TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding Item.SizeText}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border Grid.Row="2" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" Padding="32,14"
+                            Visibility="{Binding IsReviewing, Converter={StaticResource TrueVisibility}}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{Binding ReviewSummary}" FontWeight="SemiBold" FontSize="15"/>
+                                <TextBlock Style="{StaticResource Secondary}" FontSize="12" Margin="0,3,0,0" Text="{Binding ReviewNote}"
+                                           Visibility="{Binding ReviewNote, Converter={StaticResource TextVisibility}}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="16,0,0,0">
+                                <Button Padding="14,7" Margin="0,0,8,0" Command="{Binding ExportReviewCommand}"
+                                        Content="{Binding [review.export], Source={x:Static loc:Loc.Instance}}"/>
+                                <!-- Gets keyboard focus when the list opens; Esc also presses it. The confirm button is never the default. -->
+                                <Button x:Name="ReviewBackButton" IsCancel="True" Padding="18,7" MinWidth="90" Margin="0,0,8,0"
+                                        Command="{Binding CancelReviewCommand}"
+                                        Content="{Binding [review.back], Source={x:Static loc:Loc.Instance}}"/>
+                                <Button Style="{DynamicResource AccentButtonStyle}" Padding="18,7" MinWidth="150"
+                                        Command="{Binding ConfirmCleanCommand}"
+                                        Content="{Binding [review.confirm], Source={x:Static loc:Loc.Instance}}"/>
+                            </StackPanel>
                         </Grid>
                     </Border>
                 </Grid>

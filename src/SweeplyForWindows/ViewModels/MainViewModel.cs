@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Reflection;
 using System.Windows.Input;
 using System.Windows.Shell;
+using System.Windows.Threading;
 using Sweeply.Core;
 using SweeplyForWindows.Localization;
 using SweeplyForWindows.Monitor;
@@ -30,6 +31,11 @@ public sealed class MainViewModel : ObservableObject
     private int _progressDone;
     private int _progressTotal;
     private TaskbarItemProgressState _taskbarState = TaskbarItemProgressState.None;
+    private bool _isReviewing;
+    private bool _confirmReady;
+    private string? _reviewNote;
+    private readonly List<ReviewRow> _reviewItems = new();
+    private readonly DispatcherTimer _confirmDelay = new() { Interval = TimeSpan.FromSeconds(1) };
 
     public MainViewModel(KnownPaths paths, Settings settings)
     {
@@ -41,21 +47,69 @@ public sealed class MainViewModel : ObservableObject
             group.Categories.Add(new CategoryViewModel(category, OnSelectionChanged));
         }
 
-        ScanCommand = new RelayCommand(async _ => await ScanAsync(), () => !IsBusy);
-        CleanCommand = new RelayCommand(async _ => await CleanAsync(), () => CanClean);
+        ScanCommand = new RelayCommand(async _ => await ScanAsync(), () => !IsBusy && !IsReviewing);
+        CleanCommand = new RelayCommand(_ => OpenReview(), () => CanClean);
+        ConfirmCleanCommand = new RelayCommand(async _ => await ConfirmCleanAsync(), () => CanConfirmReview);
+        CancelReviewCommand = new RelayCommand(_ => CloseReview());
+        ExportReviewCommand = new RelayCommand(_ => ExportReview(), () => IsReviewing);
         OpenUrlCommand = new RelayCommand(p => OpenUrl(p as string));
         Loc.Instance.LanguageChanged += Relocalize;
+        _confirmDelay.Tick += (_, _) =>
+        {
+            _confirmDelay.Stop();
+            _confirmReady = true;
+            OnPropertyChanged(nameof(CanConfirmReview));
+            CommandManager.InvalidateRequerySuggested();
+        };
     }
 
     public ObservableCollection<GroupViewModel> Groups { get; } = new();
     public IEnumerable<CategoryViewModel> AllCategories => Groups.SelectMany(g => g.Categories);
 
     public ICommand ScanCommand { get; }
+
+    /// <summary>Opens the list of everything that would be moved; nothing moves yet.</summary>
     public ICommand CleanCommand { get; }
+    public ICommand ConfirmCleanCommand { get; }
+    public ICommand CancelReviewCommand { get; }
+    public ICommand ExportReviewCommand { get; }
     public ICommand OpenUrlCommand { get; }
 
-    /// <summary>Asks the user to confirm (title, message). Set by the window.</summary>
-    public Func<string, string, bool>? Confirm { get; set; }
+    /// <summary>Asks where to save the list (suggested file name); null when cancelled. Set by the window.</summary>
+    public Func<string, string?>? PickSaveFile { get; set; }
+
+    /// <summary>
+    /// The list of what would be moved is showing. It is the only way to start cleaning: the user sees
+    /// every item, can untick any of them, and must press the confirm button (not the default button,
+    /// and only after a second, so stray key presses or clicks cannot start a clean).
+    /// </summary>
+    public bool IsReviewing
+    {
+        get => _isReviewing;
+        private set
+        {
+            if (!SetField(ref _isReviewing, value)) return;
+            OnPropertyChanged(nameof(CanClean));
+            OnPropertyChanged(nameof(CanConfirmReview));
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    public ObservableCollection<ReviewRow> ReviewRows { get; } = new();
+
+    private IEnumerable<ReviewRow> ReviewSelected => _reviewItems.Where(r => r.Item!.IsSelected);
+
+    public string ReviewSummary => Loc.Instance.Format("review.summary", ReviewSelected.Count(),
+        SizeFormatter.Format(ReviewSelected.Sum(r => r.Item!.Item.Bytes), Loc.Instance.Culture));
+
+    public bool CanConfirmReview => IsReviewing && _confirmReady && !IsBusy && ReviewSelected.Any();
+
+    /// <summary>Shown under the summary, e.g. where the list was saved.</summary>
+    public string? ReviewNote
+    {
+        get => _reviewNote;
+        private set => SetField(ref _reviewNote, value);
+    }
 
     /// <summary>Window handle that owns the Recycle Bin warnings. Set by the window.</summary>
     public Func<IntPtr>? OwnerHandle { get; set; }
@@ -175,7 +229,7 @@ public sealed class MainViewModel : ObservableObject
     public string SelectedText => Loc.Instance.Format("clean.selected", SizeFormatter.Format(SelectedBytes, Loc.Instance.Culture));
     public string FoundText => Loc.Instance.Format("clean.found", SizeFormatter.Format(FoundBytes, Loc.Instance.Culture));
 
-    public bool CanClean => !IsBusy && SelectedCount > 0;
+    public bool CanClean => !IsBusy && !IsReviewing && SelectedCount > 0;
 
     /// <summary>0..1, shown in the window footer and on the taskbar button.</summary>
     public double Progress
@@ -225,18 +279,81 @@ public sealed class MainViewModel : ObservableObject
         IsBusy = false;
     }
 
-    private async Task CleanAsync()
+    /// <summary>Shows every selected item, grouped by category. Nothing is moved here.</summary>
+    public void OpenReview()
     {
-        var selection = AllCategories
-            .SelectMany(c => c.SelectedItems.Select(item => (item, c.Category)))
-            .ToList();
+        if (IsBusy) return;
+        ReviewRows.Clear();
+        _reviewItems.Clear();
+        var culture = Loc.Instance.Culture;
+        foreach (var c in AllCategories)
+        {
+            var items = c.SelectedItemViewModels.ToList();
+            if (items.Count == 0) continue;
+            ReviewRows.Add(new ReviewRow(Loc.Instance.Format("review.category", c.Name, items.Count,
+                SizeFormatter.Format(items.Sum(i => i.Item.Bytes), culture))));
+            foreach (var item in items)
+            {
+                var row = new ReviewRow(item, c.Category);
+                ReviewRows.Add(row);
+                _reviewItems.Add(row);
+            }
+        }
+        if (_reviewItems.Count == 0) return;
+        ReviewNote = null;
+        _confirmReady = false;
+        _confirmDelay.Stop();
+        _confirmDelay.Start();
+        IsReviewing = true;
+        OnPropertyChanged(nameof(ReviewSummary));
+    }
+
+    private void CloseReview()
+    {
+        _confirmDelay.Stop();
+        _confirmReady = false;
+        IsReviewing = false;
+        ReviewRows.Clear();
+        _reviewItems.Clear();
+    }
+
+    private async Task ConfirmCleanAsync()
+    {
+        if (!CanConfirmReview) return;
+        // Exactly what the list showed, minus anything unticked there.
+        var selection = ReviewSelected.Select(r => (r.Item!.Item, r.Category!)).ToList();
+        CloseReview();
+        await CleanAsync(selection);
+    }
+
+    private void ExportReview()
+    {
+        string? path = PickSaveFile?.Invoke($"SweeplyForWindows-{DateTime.Now:yyyyMMdd-HHmm}.txt");
+        if (path is null) return;
+        var culture = Loc.Instance.Culture;
+        var text = new System.Text.StringBuilder()
+            .AppendLine(Loc.Instance["review.title"])
+            .AppendLine(DateTime.Now.ToString("yyyy-MM-dd HH:mm", culture))
+            .AppendLine(ReviewSummary);
+        foreach (var row in ReviewRows)
+        {
+            if (row.IsHeading) text.AppendLine().AppendLine(row.Heading);
+            else if (row.Item!.IsSelected) text.Append(row.Item.Path).Append('\t').AppendLine(row.Item.SizeText);
+        }
+        try
+        {
+            System.IO.File.WriteAllText(path, text.ToString(), new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            ReviewNote = Loc.Instance.Format("review.exported", path);
+        }
+        catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
+        {
+            ReviewNote = e.Message;
+        }
+    }
+
+    private async Task CleanAsync(List<(CleanupItem Item, CleanupCategory Category)> selection)
+    {
         if (selection.Count == 0) return;
-
-        string size = SizeFormatter.Format(selection.Sum(s => s.item.Bytes), Loc.Instance.Culture);
-        bool ok = Confirm?.Invoke(Loc.Instance["clean.confirm.title"],
-            Loc.Instance.Format("clean.confirm.body", selection.Count, size)) ?? false;
-        if (!ok) return;
-
         IsBusy = true;
         StatusMessage = null;
         TaskbarState = TaskbarItemProgressState.Normal;
@@ -286,6 +403,11 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedText));
         OnPropertyChanged(nameof(FoundText));
         OnPropertyChanged(nameof(CanClean));
+        if (IsReviewing)
+        {
+            OnPropertyChanged(nameof(ReviewSummary));
+            OnPropertyChanged(nameof(CanConfirmReview));
+        }
         CommandManager.InvalidateRequerySuggested();
     }
 
