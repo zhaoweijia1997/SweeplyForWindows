@@ -25,6 +25,28 @@ public class RecycleBinIntegrationTests
     }
 
     [Fact]
+    public void Undo_puts_a_really_recycled_file_back()
+    {
+        if (!Enabled) return;
+        using var t = new TestFolder();
+        string file = t.File("SweeplyForWindows-undo-test.txt", 32);
+        var started = DateTime.UtcNow;
+        Assert.True(new ShellRecycleBin().TryRecycle(file, out string? error), error);
+        var record = new CleanRecord
+        {
+            StartedUtc = started,
+            FinishedUtc = DateTime.UtcNow,
+            Items = { new RecordedItem(file, false, 32) },
+        };
+
+        var outcome = Undo.Restore(record, RecycleBinReader.CurrentUserFolders());
+
+        Assert.Equal(1, outcome.Restored);
+        Assert.True(File.Exists(file));
+        Assert.Equal(UndoState.Undone, record.State);
+    }
+
+    [Fact]
     public void Reports_failure_for_a_missing_path()
     {
         if (!Enabled) return;

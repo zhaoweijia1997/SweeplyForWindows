@@ -178,7 +178,8 @@ internal static class Snapshot
         foreach (var (page, name, lang, theme) in shots)
         {
             Loc.Instance.SetLanguage(lang);
-            var vm = new MainViewModel(KnownPaths.FromSystem(), new Settings());
+            // In-memory history: screenshots never show this PC's real cleans.
+            var vm = new MainViewModel(KnownPaths.FromSystem(), new Settings(), new CleanHistory(null));
             vm.LoadSample();
             vm.PageIndex = page;
             var window = new MainWindow(vm, scanOnOpen: false)
@@ -203,7 +204,7 @@ internal static class Snapshot
         foreach (var lang in new[] { "en", "zh-Hans" })
         {
             Loc.Instance.SetLanguage(lang);
-            var vm = new MainViewModel(KnownPaths.FromSystem(), new Settings());
+            var vm = new MainViewModel(KnownPaths.FromSystem(), new Settings(), new CleanHistory(null));
             vm.LoadSample();
             vm.OpenReview();
             var window = new MainWindow(vm, scanOnOpen: false)

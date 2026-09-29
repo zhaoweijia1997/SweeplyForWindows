@@ -36,10 +36,19 @@ public sealed class MainViewModel : ObservableObject
     private string? _reviewNote;
     private readonly List<ReviewRow> _reviewItems = new();
     private readonly DispatcherTimer _confirmDelay = new() { Interval = TimeSpan.FromSeconds(1) };
+    private readonly CleanHistory _history;
+    private CleanRecord? _lastRecord;
+    private string? _historyNote;
 
-    public MainViewModel(KnownPaths paths, Settings settings)
+    /// <summary>Where past cleans are kept: a file of its own, written by the app only.</summary>
+    public static string HistoryFile => System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SweeplyForWindows", "history.json");
+
+    /// <param name="history">Past cleans; null loads them from <see cref="HistoryFile"/>.</param>
+    public MainViewModel(KnownPaths paths, Settings settings, CleanHistory? history = null)
     {
         _settings = settings;
+        _history = history ?? CleanHistory.Load(HistoryFile);
         foreach (var category in CategoryCatalog.Create(paths))
         {
             var group = Groups.FirstOrDefault(g => g.Group == category.Group);
@@ -52,6 +61,8 @@ public sealed class MainViewModel : ObservableObject
         ConfirmCleanCommand = new RelayCommand(async _ => await ConfirmCleanAsync(), () => CanConfirmReview);
         CancelReviewCommand = new RelayCommand(_ => CloseReview());
         ExportReviewCommand = new RelayCommand(_ => ExportReview(), () => IsReviewing);
+        UndoLastCommand = new RelayCommand(async _ => { if (_lastRecord is not null) await UndoAsync(_lastRecord); }, () => CanUndoLast);
+        RefreshHistory();
         OpenUrlCommand = new RelayCommand(p => OpenUrl(p as string));
         Loc.Instance.LanguageChanged += Relocalize;
         _confirmDelay.Tick += (_, _) =>
@@ -73,7 +84,23 @@ public sealed class MainViewModel : ObservableObject
     public ICommand ConfirmCleanCommand { get; }
     public ICommand CancelReviewCommand { get; }
     public ICommand ExportReviewCommand { get; }
+    public ICommand UndoLastCommand { get; }
     public ICommand OpenUrlCommand { get; }
+
+    /// <summary>The clean that just finished can still be undone (shown next to its result).</summary>
+    public bool CanUndoLast => !IsBusy && _lastRecord is { State: not UndoState.Undone };
+
+    /// <summary>Settings page: the last few cleans, newest first.</summary>
+    public ObservableCollection<HistoryRowViewModel> HistoryRows { get; } = new();
+
+    public bool HasHistory => HistoryRows.Count > 0;
+
+    /// <summary>Settings page: the result of the last undo.</summary>
+    public string? HistoryNote
+    {
+        get => _historyNote;
+        private set => SetField(ref _historyNote, value);
+    }
 
     /// <summary>Asks where to save the list (suggested file name); null when cancelled. Set by the window.</summary>
     public Func<string, string?>? PickSaveFile { get; set; }
@@ -200,6 +227,7 @@ public sealed class MainViewModel : ObservableObject
             if (SetField(ref _isBusy, value))
             {
                 OnPropertyChanged(nameof(CanClean));
+                OnPropertyChanged(nameof(CanUndoLast));
                 CommandManager.InvalidateRequerySuggested();
             }
         }
@@ -355,6 +383,8 @@ public sealed class MainViewModel : ObservableObject
     {
         if (selection.Count == 0) return;
         IsBusy = true;
+        _lastRecord = null;
+        var startedUtc = DateTime.UtcNow;
         StatusMessage = null;
         TaskbarState = TaskbarItemProgressState.Normal;
         ReportProgress("clean.progress", 0, selection.Count);
@@ -364,14 +394,54 @@ public sealed class MainViewModel : ObservableObject
         // The shell's Recycle Bin operation may show a warning window: run it on an STA thread.
         var outcome = await RunOnStaThread(() => Cleaner.Clean(selection, new ShellRecycleBin(owner), DateTime.UtcNow, progress));
 
+        // Remember exactly what went to the Recycle Bin, so this clean can be undone.
+        if (outcome.Moved.Count > 0)
+        {
+            _lastRecord = new CleanRecord
+            {
+                StartedUtc = startedUtc,
+                FinishedUtc = DateTime.UtcNow,
+                Items = outcome.Moved.Select(i => new RecordedItem(i.Path, i.IsDirectory, i.Bytes)).ToList(),
+            };
+            _history.Add(_lastRecord);
+            RefreshHistory();
+        }
+
         string moved = SizeFormatter.Format(outcome.MovedBytes, Loc.Instance.Culture);
         StatusMessage = outcome.Skipped.Count == 0
             ? Loc.Instance.Format("clean.done", outcome.MovedCount, moved)
             : Loc.Instance.Format("clean.doneSkipped", outcome.MovedCount, moved, outcome.Skipped.Count);
         TaskbarState = TaskbarItemProgressState.None;
         IsBusy = false;
+        OnPropertyChanged(nameof(CanUndoLast));
 
         await ScanAsync(keepMessage: true);
+    }
+
+    /// <summary>Puts back what one clean moved, from the Recycle Bin to where it was.</summary>
+    private async Task UndoAsync(CleanRecord record)
+    {
+        if (IsBusy) return;
+        IsBusy = true;
+        var outcome = await Task.Run(() => Undo.Restore(record, RecycleBinReader.CurrentUserFolders()));
+        _history.Save();
+        string message = outcome.Skipped.Count == 0
+            ? Loc.Instance.Format("undo.done", outcome.Restored)
+            : Loc.Instance.Format("undo.partial", outcome.Restored, outcome.Skipped.Count);
+        StatusMessage = message;
+        HistoryNote = message;
+        IsBusy = false;
+        RefreshHistory();
+        OnPropertyChanged(nameof(CanUndoLast));
+        await ScanAsync(keepMessage: true);
+    }
+
+    private void RefreshHistory()
+    {
+        HistoryRows.Clear();
+        foreach (var record in _history.Records)
+            HistoryRows.Add(new HistoryRowViewModel(record, () => !IsBusy, UndoAsync));
+        OnPropertyChanged(nameof(HasHistory));
     }
 
     private void ReportProgress(string key, int done, int total)
@@ -419,6 +489,7 @@ public sealed class MainViewModel : ObservableObject
             foreach (var c in g.Categories) c.Relocalize();
         }
         foreach (var option in TrayDisplayOptions) option.Relocalize();
+        RefreshHistory();
         OnAllPropertiesChanged();
     }
 
@@ -459,5 +530,23 @@ public sealed class MainViewModel : ObservableObject
         var first = AllCategories.First(c => c.Id == "temp-files");
         first.IsExpanded = true;
         HasScanned = true;
+
+        // Two made-up past cleans for the Settings page.
+        _history.Records.Clear();
+        _history.Records.Add(new CleanRecord
+        {
+            StartedUtc = new DateTime(2026, 9, 28, 1, 30, 0, DateTimeKind.Utc),
+            FinishedUtc = new DateTime(2026, 9, 28, 1, 30, 12, DateTimeKind.Utc),
+            Items = { new RecordedItem($@"{temp}\vs-setup-cache", true, 842L << 20), new RecordedItem($@"{local}\npm-cache\_cacache", true, 1310L << 20) },
+        });
+        _history.Records.Add(new CleanRecord
+        {
+            StartedUtc = new DateTime(2026, 9, 21, 8, 5, 0, DateTimeKind.Utc),
+            FinishedUtc = new DateTime(2026, 9, 21, 8, 5, 3, DateTimeKind.Utc),
+            Items = { new RecordedItem($@"{local}\CrashDumps\game.exe.4412.dmp", false, 96L << 20) },
+            State = UndoState.Undone,
+            RestoredCount = 1,
+        });
+        RefreshHistory();
     }
 }
