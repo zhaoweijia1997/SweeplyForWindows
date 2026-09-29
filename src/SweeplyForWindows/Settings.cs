@@ -1,5 +1,7 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using SweeplyForWindows.Monitor;
 
 namespace SweeplyForWindows;
 
@@ -16,6 +18,19 @@ public sealed class Settings
 
     /// <summary>The "still running" notification has been shown once already.</summary>
     public bool TrayHintShown { get; set; }
+
+    /// <summary>A live number on the notification-area icon instead of the app icon.</summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public TrayDisplay TrayDisplay { get; set; } = TrayDisplay.AppIcon;
+
+    /// <summary>Pointing at the icon shows network, CPU and disk activity.</summary>
+    public bool TrayToolTipStats { get; set; } = true;
+
+    public bool ShowMonitorBar { get; set; }
+
+    /// <summary>Where the floating bar was last dragged to (device-independent pixels).</summary>
+    public double? MonitorBarLeft { get; set; }
+    public double? MonitorBarTop { get; set; }
 
     private static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SweeplyForWindows", "settings.json");

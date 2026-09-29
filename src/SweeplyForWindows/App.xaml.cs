@@ -5,6 +5,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Sweeply.Core;
 using SweeplyForWindows.Localization;
+using SweeplyForWindows.Monitor;
 using SweeplyForWindows.Platform;
 using SweeplyForWindows.ViewModels;
 
@@ -13,12 +14,15 @@ namespace SweeplyForWindows;
 public partial class App : Application
 {
     private const int MenuOpen = 1;
-    private const int MenuExit = 2;
+    private const int MenuShowBar = 2;
+    private const int MenuExit = 3;
 
     private SingleInstance? _instance;
     private Settings _settings = new();
+    private MainViewModel? _viewModel;
     private MainWindow? _window;
     private TrayIcon? _tray;
+    private MonitorController? _monitor;
     private bool _exiting;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -83,16 +87,24 @@ public partial class App : Application
         Loc.Instance.SetLanguage(_settings.Language ?? Loc.FromSystem());
         Autostart.Refresh();
 
-        _window = new MainWindow(new MainViewModel(KnownPaths.FromSystem(), _settings));
+        _viewModel = new MainViewModel(KnownPaths.FromSystem(), _settings);
+        _window = new MainWindow(_viewModel);
         _window.Closing += OnWindowClosing;
         _window.Closed += (_, _) => ExitApp();
 
         _tray = new TrayIcon();
-        _tray.SetIcon(IconFactory.ToIconHandle(IconFactory.AppIcon(_tray.IconSize)));
         _tray.SetToolTip("SweeplyForWindows");
         _tray.Clicked += ShowMainWindow;
         _tray.NotificationClicked += ShowMainWindow;
         _tray.MenuRequested += ShowTrayMenu;
+
+        // Icon number, icon details and the floating bar; the Settings page, the icon's menu and
+        // the bar's own menu all change the same settings through the view model.
+        _monitor = new MonitorController(_settings, _tray, Dispatcher);
+        _monitor.OpenRequested += ShowMainWindow;
+        _monitor.HideBarRequested += () => _viewModel.ShowMonitorBar = false;
+        _viewModel.MonitorSettingsChanged += _monitor.Apply;
+        _monitor.Apply();
         _tray.Show();
 
         instance.Listen(args => Dispatcher.BeginInvoke(() => ShowMainWindow()));
@@ -115,10 +127,12 @@ public partial class App : Application
         int chosen = _tray!.ShowMenu(x, y, new[]
         {
             new TrayMenuItem(MenuOpen, loc["tray.open"]),
+            new TrayMenuItem(MenuShowBar, loc["tray.showBar"], _settings.ShowMonitorBar),
             TrayMenuItem.Separator,
             new TrayMenuItem(MenuExit, loc["tray.exit"]),
         });
         if (chosen == MenuOpen) ShowMainWindow();
+        else if (chosen == MenuShowBar) _viewModel!.ShowMonitorBar = !_settings.ShowMonitorBar;
         else if (chosen == MenuExit) ExitApp();
     }
 
@@ -139,6 +153,7 @@ public partial class App : Application
     {
         if (_exiting) return;
         _exiting = true;
+        _monitor?.Dispose();
         _tray?.Dispose();
         _instance?.Dispose();
         Shutdown(0);
@@ -183,6 +198,62 @@ internal static class Snapshot
             Save(window, theme == ThemeMode.Dark, Path.Combine(folder, $"{name}-{lang}-{themeName}.png"));
             window.Close();
         }
+
+        RenderTrayIcons(Path.Combine(folder, "tray-icons.png"));
+        foreach (var lang in new[] { "en", "zh-Hans" })
+        {
+            Loc.Instance.SetLanguage(lang);
+            RenderMonitorBar(Path.Combine(folder, $"monitor-bar-{lang}.png"));
+        }
+    }
+
+    /// <summary>Every kind of icon number at the three common icon sizes, enlarged 4x to check pixels.</summary>
+    private static void RenderTrayIcons(string path)
+    {
+        string[] texts = { "3", "37", "100", "0K", "85K", "0.4M", "12M", "123M", "1.2G", "—" };
+        int[] sizes = { 16, 24, 32 };
+        const int zoom = 4, gap = 4;
+        var visual = new DrawingVisual();
+        RenderOptions.SetBitmapScalingMode(visual, BitmapScalingMode.NearestNeighbor);
+        using (var dc = visual.RenderOpen())
+        {
+            dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, texts.Length * (32 + gap) * zoom, sizes.Sum(s => s + gap) * zoom));
+            double y = 0;
+            foreach (int size in sizes)
+            {
+                for (int i = 0; i < texts.Length; i++)
+                    // Copied, because the renderer reuses one canvas for every call.
+                    dc.DrawImage(new WriteableBitmap(Monitor.TrayIconRenderer.Render(texts[i], size)), new Rect(i * (32 + gap) * zoom, y, size * zoom, size * zoom));
+                y += (size + gap) * zoom;
+            }
+        }
+        var bitmap = new RenderTargetBitmap(texts.Length * (32 + gap) * zoom, sizes.Sum(s => s + gap) * zoom, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(path);
+        encoder.Save(stream);
+    }
+
+    private static void RenderMonitorBar(string path)
+    {
+        var model = new Monitor.MonitorBarViewModel { Download = "1.2 MB/s", Upload = "35 KB/s", Cpu = "37%", DiskWrite = "3.4 MB/s" };
+        var bar = new Monitor.MonitorBar(model)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Left = -32000,
+            Top = -32000,
+        };
+        bar.Show();
+        WaitForAnimations(TimeSpan.FromMilliseconds(300));
+        var root = (FrameworkElement)VisualTreeHelper.GetChild(bar, 0);
+        const double dpi = 192;
+        var bitmap = new RenderTargetBitmap((int)(root.ActualWidth * dpi / 96), (int)(root.ActualHeight * dpi / 96), dpi, dpi, PixelFormats.Pbgra32);
+        bitmap.Render(root);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using (var stream = File.Create(path)) encoder.Save(stream);
+        bar.Close();
     }
 
     /// <summary>Keeps the message loop running for a while so expand animations finish before rendering.</summary>

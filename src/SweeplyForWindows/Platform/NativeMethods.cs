@@ -38,6 +38,8 @@ internal static class NativeMethods
 
     public const int SM_CXSMICON = 49;
     public const int ASFW_ANY = -1;
+    public const int GWL_EXSTYLE = -20;
+    public const long WS_EX_TOOLWINDOW = 0x00000080;
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     public struct NOTIFYICONDATA
@@ -107,6 +109,13 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern int GetSystemMetricsForDpi(int index, uint dpi);
+
+    // The app ships as 64-bit only, where these two exist (32-bit Windows has GetWindowLong instead).
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    public static extern IntPtr GetWindowLongPtr(IntPtr window, int index);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+    public static extern IntPtr SetWindowLongPtr(IntPtr window, int index, IntPtr value);
 
     [DllImport("user32.dll")]
     public static extern IntPtr CreateIconIndirect(ref ICONINFO info);

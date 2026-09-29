@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Shell;
 using Sweeply.Core;
 using SweeplyForWindows.Localization;
+using SweeplyForWindows.Monitor;
 using SweeplyForWindows.Platform;
 
 namespace SweeplyForWindows.ViewModels;
@@ -101,6 +102,40 @@ public sealed class MainViewModel : ObservableObject
             _settings.Save();
             OnPropertyChanged();
         }
+    }
+
+    /// <summary>Raised when a Settings-page choice about the activity monitor changed.</summary>
+    public event Action? MonitorSettingsChanged;
+
+    public IReadOnlyList<TrayDisplayOption> TrayDisplayOptions { get; } =
+        Enum.GetValues<TrayDisplay>().Select(d => new TrayDisplayOption(d)).ToList();
+
+    public TrayDisplay SelectedTrayDisplay
+    {
+        get => _settings.TrayDisplay;
+        set => SetMonitorSetting(_settings.TrayDisplay, value, v => _settings.TrayDisplay = v);
+    }
+
+    public bool TrayToolTipStats
+    {
+        get => _settings.TrayToolTipStats;
+        set => SetMonitorSetting(_settings.TrayToolTipStats, value, v => _settings.TrayToolTipStats = v);
+    }
+
+    /// <summary>Also switched from the icon's menu and the bar's own menu.</summary>
+    public bool ShowMonitorBar
+    {
+        get => _settings.ShowMonitorBar;
+        set => SetMonitorSetting(_settings.ShowMonitorBar, value, v => _settings.ShowMonitorBar = v);
+    }
+
+    private void SetMonitorSetting<T>(T current, T value, Action<T> store, [System.Runtime.CompilerServices.CallerMemberName] string? name = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(current, value)) return;
+        store(value);
+        _settings.Save();
+        OnPropertyChanged(name);
+        MonitorSettingsChanged?.Invoke();
     }
 
     public bool IsBusy
@@ -261,6 +296,7 @@ public sealed class MainViewModel : ObservableObject
             g.Relocalize();
             foreach (var c in g.Categories) c.Relocalize();
         }
+        foreach (var option in TrayDisplayOptions) option.Relocalize();
         OnAllPropertiesChanged();
     }
 
