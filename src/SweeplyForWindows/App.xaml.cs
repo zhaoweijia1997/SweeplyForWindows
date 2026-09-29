@@ -5,12 +5,22 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Sweeply.Core;
 using SweeplyForWindows.Localization;
+using SweeplyForWindows.Platform;
 using SweeplyForWindows.ViewModels;
 
 namespace SweeplyForWindows;
 
 public partial class App : Application
 {
+    private const int MenuOpen = 1;
+    private const int MenuExit = 2;
+
+    private SingleInstance? _instance;
+    private Settings _settings = new();
+    private MainWindow? _window;
+    private TrayIcon? _tray;
+    private bool _exiting;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -56,10 +66,82 @@ public partial class App : Application
             return;
         }
 
-        var settings = Settings.Load();
-        Loc.Instance.SetLanguage(settings.Language ?? Loc.FromSystem());
-        var viewModel = new MainViewModel(KnownPaths.FromSystem(), settings);
-        new MainWindow(viewModel).Show();
+        // A second launch (Start menu, start-up, later the folder menu) only wakes the running copy.
+        var instance = new SingleInstance("SweeplyForWindows");
+        if (!instance.IsFirst)
+        {
+            instance.SendToFirst(e.Args);
+            instance.Dispose();
+            Shutdown(0);
+            return;
+        }
+        _instance = instance;
+
+        // The app lives in the notification area; closing the window does not end it (unless turned off).
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        _settings = Settings.Load();
+        Loc.Instance.SetLanguage(_settings.Language ?? Loc.FromSystem());
+        Autostart.Refresh();
+
+        _window = new MainWindow(new MainViewModel(KnownPaths.FromSystem(), _settings));
+        _window.Closing += OnWindowClosing;
+        _window.Closed += (_, _) => ExitApp();
+
+        _tray = new TrayIcon();
+        _tray.SetIcon(IconFactory.ToIconHandle(IconFactory.AppIcon(_tray.IconSize)));
+        _tray.SetToolTip("SweeplyForWindows");
+        _tray.Clicked += ShowMainWindow;
+        _tray.NotificationClicked += ShowMainWindow;
+        _tray.MenuRequested += ShowTrayMenu;
+        _tray.Show();
+
+        instance.Listen(args => Dispatcher.BeginInvoke(() => ShowMainWindow()));
+
+        if (!e.Args.Contains(Autostart.BackgroundArg))
+            ShowMainWindow();
+    }
+
+    private void ShowMainWindow()
+    {
+        if (_window is null || _exiting) return;
+        if (!_window.IsVisible) _window.Show();
+        if (_window.WindowState == WindowState.Minimized) _window.WindowState = WindowState.Normal;
+        _window.Activate();
+    }
+
+    private void ShowTrayMenu(int x, int y)
+    {
+        var loc = Loc.Instance;
+        int chosen = _tray!.ShowMenu(x, y, new[]
+        {
+            new TrayMenuItem(MenuOpen, loc["tray.open"]),
+            TrayMenuItem.Separator,
+            new TrayMenuItem(MenuExit, loc["tray.exit"]),
+        });
+        if (chosen == MenuOpen) ShowMainWindow();
+        else if (chosen == MenuExit) ExitApp();
+    }
+
+    private void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (_exiting || !_settings.CloseToTray) return; // a real close: Closed ends the app
+        e.Cancel = true;
+        _window!.Hide();
+        if (!_settings.TrayHintShown)
+        {
+            _tray?.ShowNotification(Loc.Instance["tray.hint.title"], Loc.Instance["tray.hint.body"]);
+            _settings.TrayHintShown = true;
+            _settings.Save();
+        }
+    }
+
+    private void ExitApp()
+    {
+        if (_exiting) return;
+        _exiting = true;
+        _tray?.Dispose();
+        _instance?.Dispose();
+        Shutdown(0);
     }
 }
 
@@ -72,9 +154,11 @@ internal static class Snapshot
         foreach (var lang in Loc.Languages) shots.Add((0, "clean", lang.Code, ThemeMode.Light));
         shots.Add((0, "clean", "en", ThemeMode.Dark));
         shots.Add((0, "clean", "zh-Hans", ThemeMode.Dark));
-        shots.Add((1, "support", "en", ThemeMode.Light));
-        shots.Add((1, "support", "zh-Hans", ThemeMode.Light));
-        shots.Add((2, "about", "en", ThemeMode.Light));
+        shots.Add((1, "settings", "en", ThemeMode.Light));
+        shots.Add((1, "settings", "zh-Hans", ThemeMode.Light));
+        shots.Add((2, "support", "en", ThemeMode.Light));
+        shots.Add((2, "support", "zh-Hans", ThemeMode.Light));
+        shots.Add((3, "about", "en", ThemeMode.Light));
 
         foreach (var (page, name, lang, theme) in shots)
         {

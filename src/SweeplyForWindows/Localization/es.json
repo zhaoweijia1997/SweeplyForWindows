@@ -3,6 +3,7 @@
   "nav.clean": "Limpiar",
   "nav.support": "Apoyar",
   "nav.about": "Acerca de",
+  "nav.settings": "Configuración",
   "nav.language": "Idioma",
 
   "clean.title": "Limpiar",
@@ -52,6 +53,17 @@
   "cat.gradle-cache.desc": "Dependencias y cachés de compilación que Gradle descargó (Android Studio). Se descargan de nuevo en la próxima compilación.",
   "cat.download-installers.name": "Instaladores en Descargas",
   "cat.download-installers.desc": "Archivos de instalación (.exe, .msi, .msix) que descargaste. No se seleccionan por defecto: conserva los que aún necesites.",
+
+  "settings.title": "Configuración",
+  "settings.section.background": "Ejecución en segundo plano",
+  "settings.startWithWindows": "Iniciar con Windows",
+  "settings.startWithWindows.desc": "Se inicia en silencio en el área de notificación al iniciar sesión. No analiza ni limpia nada hasta que se lo pidas.",
+  "settings.closeToTray": "Seguir ejecutándose al cerrar la ventana",
+  "settings.closeToTray.desc": "El icono se queda en el área de notificación. Para salir, haz clic derecho en él y elige Salir.",
+  "tray.open": "Abrir SweeplyForWindows",
+  "tray.exit": "Salir",
+  "tray.hint.title": "SweeplyForWindows sigue ejecutándose",
+  "tray.hint.body": "Está en el área de notificación. Haz clic derecho en el icono para salir, o cámbialo en Configuración.",
 
   "support.title": "Apoya SweeplyForWindows",
   "support.body1": "SweeplyForWindows es gratis y siempre lo será: sin anuncios, sin cuentas y sin recopilar datos.",

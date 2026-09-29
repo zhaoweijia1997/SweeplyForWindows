@@ -3,6 +3,7 @@
   "nav.clean": "Clean up",
   "nav.support": "Support",
   "nav.about": "About",
+  "nav.settings": "Settings",
   "nav.language": "Language",
 
   "clean.title": "Clean up",
@@ -52,6 +53,17 @@
   "cat.gradle-cache.desc": "Dependencies and build caches Gradle downloaded (Android Studio). Downloaded again on the next build.",
   "cat.download-installers.name": "Installers in Downloads",
   "cat.download-installers.desc": "Setup files (.exe, .msi, .msix) you downloaded. Not selected by default — keep the ones you still need.",
+
+  "settings.title": "Settings",
+  "settings.section.background": "Running in the background",
+  "settings.startWithWindows": "Start with Windows",
+  "settings.startWithWindows.desc": "Starts quietly in the notification area when you sign in. Nothing is scanned or cleaned until you ask.",
+  "settings.closeToTray": "Keep running when the window is closed",
+  "settings.closeToTray.desc": "The icon stays in the notification area. Right-click it and choose Exit to quit.",
+  "tray.open": "Open SweeplyForWindows",
+  "tray.exit": "Exit",
+  "tray.hint.title": "SweeplyForWindows is still running",
+  "tray.hint.body": "It's in the notification area. Right-click the icon to exit, or change this in Settings.",
 
   "support.title": "Support SweeplyForWindows",
   "support.body1": "SweeplyForWindows is free and always will be — no ads, no accounts, no data collection.",

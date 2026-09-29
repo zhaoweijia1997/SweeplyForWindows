@@ -11,6 +11,12 @@ public sealed class Settings
 {
     public string? Language { get; set; }
 
+    /// <summary>Closing the window leaves the app running in the notification area.</summary>
+    public bool CloseToTray { get; set; } = true;
+
+    /// <summary>The "still running" notification has been shown once already.</summary>
+    public bool TrayHintShown { get; set; }
+
     private static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SweeplyForWindows", "settings.json");
 

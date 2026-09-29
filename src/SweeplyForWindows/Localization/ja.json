@@ -3,6 +3,7 @@
   "nav.clean": "クリーンアップ",
   "nav.support": "開発者を応援",
   "nav.about": "このアプリについて",
+  "nav.settings": "設定",
   "nav.language": "言語",
 
   "clean.title": "クリーンアップ",
@@ -52,6 +53,17 @@
   "cat.gradle-cache.desc": "Gradle（Android Studio）がダウンロードした依存関係とビルド キャッシュ。次のビルドで再ダウンロードされます。",
   "cat.download-installers.name": "ダウンロード内のインストーラー",
   "cat.download-installers.desc": "ダウンロードしたセットアップ ファイル（.exe、.msi、.msix）。既定では選択されません。まだ必要なものは残してください。",
+
+  "settings.title": "設定",
+  "settings.section.background": "バックグラウンド実行",
+  "settings.startWithWindows": "Windows の起動時に開始",
+  "settings.startWithWindows.desc": "サインイン時に通知領域で静かに起動します。指示するまで、スキャンもクリーンアップもしません。",
+  "settings.closeToTray": "ウィンドウを閉じても実行を続ける",
+  "settings.closeToTray.desc": "アイコンが通知領域に残ります。終了するには、アイコンを右クリックして［終了］を選びます。",
+  "tray.open": "SweeplyForWindows を開く",
+  "tray.exit": "終了",
+  "tray.hint.title": "SweeplyForWindows は実行中です",
+  "tray.hint.body": "通知領域にあります。終了するにはアイコンを右クリックします。［設定］で変更することもできます。",
 
   "support.title": "SweeplyForWindows を応援",
   "support.body1": "SweeplyForWindows はずっと無料です。広告なし、アカウント不要、データ収集なし。",

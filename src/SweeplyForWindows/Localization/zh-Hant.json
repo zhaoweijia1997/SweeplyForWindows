@@ -3,6 +3,7 @@
   "nav.clean": "清理",
   "nav.support": "支持作者",
   "nav.about": "關於",
+  "nav.settings": "設定",
   "nav.language": "語言",
 
   "clean.title": "清理",
@@ -52,6 +53,17 @@
   "cat.gradle-cache.desc": "Gradle（Android Studio）下載的相依套件和建置快取。下次建置時會重新下載。",
   "cat.download-installers.name": "「下載」資料夾中的安裝程式",
   "cat.download-installers.desc": "你下載過的安裝檔（.exe、.msi、.msix）。預設不勾選，還需要的請保留。",
+
+  "settings.title": "設定",
+  "settings.section.background": "背景執行",
+  "settings.startWithWindows": "開機時自動啟動",
+  "settings.startWithWindows.desc": "登入後安靜地在通知區域（螢幕右下角）啟動。你不按，它不會掃描也不會清理。",
+  "settings.closeToTray": "關閉視窗後繼續在背景執行",
+  "settings.closeToTray.desc": "圖示留在通知區域，在圖示上按右鍵選「結束」才會真正關閉。",
+  "tray.open": "開啟 SweeplyForWindows",
+  "tray.exit": "結束",
+  "tray.hint.title": "SweeplyForWindows 仍在背景執行",
+  "tray.hint.body": "它在螢幕右下角的通知區域。在圖示上按右鍵可以結束，也可以在「設定」裡改成關閉視窗就結束。",
 
   "support.title": "支持 SweeplyForWindows",
   "support.body1": "SweeplyForWindows 永久免費：沒有廣告，不用註冊帳號，不收集任何資料。",

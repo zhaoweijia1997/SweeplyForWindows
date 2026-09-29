@@ -83,6 +83,12 @@
                 </ListBoxItem>
                 <ListBoxItem Padding="10,9">
                     <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource NavGlyph}" Text="&#xE713;"/>
+                        <TextBlock Text="{Binding [nav.settings], Source={x:Static loc:Loc.Instance}}" Margin="14,0,0,0"/>
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem Padding="10,9">
+                    <StackPanel Orientation="Horizontal">
                         <TextBlock Style="{StaticResource NavGlyph}" Text="&#xEB51;"/>
                         <TextBlock Text="{Binding [nav.support], Source={x:Static loc:Loc.Instance}}" Margin="14,0,0,0"/>
                     </StackPanel>
@@ -227,9 +233,38 @@
                     </Border>
                 </Grid>
 
-                <!-- ===== Support ===== -->
+                <!-- ===== Settings ===== -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,26,32,24"
                               Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=1}">
+                    <StackPanel MaxWidth="820" HorizontalAlignment="Left">
+                        <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [settings.title], Source={x:Static loc:Loc.Instance}}"/>
+
+                        <TextBlock Text="{Binding [settings.section.background], Source={x:Static loc:Loc.Instance}}"
+                                   FontWeight="SemiBold" FontSize="14" Margin="2,22,0,8"/>
+                        <Border Style="{StaticResource Card}">
+                            <CheckBox IsChecked="{Binding StartWithWindows}" VerticalContentAlignment="Top">
+                                <StackPanel Margin="4,0,0,0">
+                                    <TextBlock Text="{Binding [settings.startWithWindows], Source={x:Static loc:Loc.Instance}}" FontWeight="SemiBold" FontSize="14"/>
+                                    <TextBlock Style="{StaticResource Secondary}" Margin="0,3,0,0"
+                                               Text="{Binding [settings.startWithWindows.desc], Source={x:Static loc:Loc.Instance}}"/>
+                                </StackPanel>
+                            </CheckBox>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <CheckBox IsChecked="{Binding CloseToTray}" VerticalContentAlignment="Top">
+                                <StackPanel Margin="4,0,0,0">
+                                    <TextBlock Text="{Binding [settings.closeToTray], Source={x:Static loc:Loc.Instance}}" FontWeight="SemiBold" FontSize="14"/>
+                                    <TextBlock Style="{StaticResource Secondary}" Margin="0,3,0,0"
+                                               Text="{Binding [settings.closeToTray.desc], Source={x:Static loc:Loc.Instance}}"/>
+                                </StackPanel>
+                            </CheckBox>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ===== Support ===== -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,26,32,24"
+                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=2}">
                     <StackPanel MaxWidth="820" HorizontalAlignment="Left">
                         <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [support.title], Source={x:Static loc:Loc.Instance}}"/>
                         <TextBlock Margin="0,14,0,0" TextWrapping="Wrap" FontSize="14"
@@ -270,7 +305,7 @@
 
                 <!-- ===== About ===== -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,26,32,24"
-                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=2}">
+                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=3}">
                     <StackPanel MaxWidth="720" HorizontalAlignment="Left">
                         <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [about.title], Source={x:Static loc:Loc.Instance}}"/>
                         <Border Style="{StaticResource Card}" Margin="0,18,0,0" Padding="20">

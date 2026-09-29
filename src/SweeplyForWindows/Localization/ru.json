@@ -3,6 +3,7 @@
   "nav.clean": "Очистка",
   "nav.support": "Поддержать",
   "nav.about": "О программе",
+  "nav.settings": "Настройки",
   "nav.language": "Язык",
 
   "clean.title": "Очистка",
@@ -52,6 +53,17 @@
   "cat.gradle-cache.desc": "Зависимости и кэши сборки, скачанные Gradle (Android Studio). Будут скачаны снова при следующей сборке.",
   "cat.download-installers.name": "Установщики в «Загрузках»",
   "cat.download-installers.desc": "Скачанные установочные файлы (.exe, .msi, .msix). По умолчанию не выбраны — оставьте те, что ещё нужны.",
+
+  "settings.title": "Настройки",
+  "settings.section.background": "Работа в фоне",
+  "settings.startWithWindows": "Запускать вместе с Windows",
+  "settings.startWithWindows.desc": "Тихо запускается в области уведомлений при входе в систему. Ничего не сканирует и не очищает, пока вы не попросите.",
+  "settings.closeToTray": "Продолжать работу после закрытия окна",
+  "settings.closeToTray.desc": "Значок остаётся в области уведомлений. Чтобы выйти, щёлкните его правой кнопкой и выберите «Выход».",
+  "tray.open": "Открыть SweeplyForWindows",
+  "tray.exit": "Выход",
+  "tray.hint.title": "SweeplyForWindows продолжает работать",
+  "tray.hint.body": "Он в области уведомлений. Чтобы выйти, щёлкните значок правой кнопкой; это можно изменить в настройках.",
 
   "support.title": "Поддержать SweeplyForWindows",
   "support.body1": "SweeplyForWindows бесплатна и всегда будет бесплатной — без рекламы, без учётных записей, без сбора данных.",

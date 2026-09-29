@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Shell;
 using Sweeply.Core;
 using SweeplyForWindows.Localization;
+using SweeplyForWindows.Platform;
 
 namespace SweeplyForWindows.ViewModels;
 
@@ -75,6 +76,30 @@ public sealed class MainViewModel : ObservableObject
             Loc.Instance.SetLanguage(value.Code);
             _settings.Language = value.Code;
             _settings.Save();
+        }
+    }
+
+    /// <summary>Settings page: start in the notification area when the user signs in.</summary>
+    public bool StartWithWindows
+    {
+        get => Autostart.IsEnabled;
+        set
+        {
+            Autostart.Set(value);
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Settings page: closing the window keeps the app in the notification area.</summary>
+    public bool CloseToTray
+    {
+        get => _settings.CloseToTray;
+        set
+        {
+            if (_settings.CloseToTray == value) return;
+            _settings.CloseToTray = value;
+            _settings.Save();
+            OnPropertyChanged();
         }
     }
 
