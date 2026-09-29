@@ -162,7 +162,8 @@
                                                                     <TextBlock Style="{StaticResource Secondary}" Text="{Binding Description}" Margin="0,3,0,0"/>
                                                                     <Expander Header="{Binding ItemsText}" IsExpanded="{Binding IsExpanded}" Margin="-4,6,0,0"
                                                                               Visibility="{Binding HasItems, Converter={StaticResource TrueVisibility}}">
-                                                                        <ItemsControl ItemsSource="{Binding Items}" Margin="4,4,0,0">
+                                                                        <StackPanel>
+                                                                        <ItemsControl ItemsSource="{Binding VisibleItems}" Margin="4,4,0,0">
                                                                             <ItemsControl.ItemTemplate>
                                                                                 <DataTemplate>
                                                                                     <Grid Margin="0,2">
@@ -184,6 +185,15 @@
                                                                                 </DataTemplate>
                                                                             </ItemsControl.ItemTemplate>
                                                                         </ItemsControl>
+                                                                        <!-- Long lists: only the largest items are drawn; the rest are still cleaned. -->
+                                                                        <StackPanel Margin="4,6,0,0" Visibility="{Binding HasHiddenItems, Converter={StaticResource TrueVisibility}}">
+                                                                            <TextBlock Style="{StaticResource Secondary}" Text="{Binding HiddenItemsText}"/>
+                                                                            <Button Style="{StaticResource LinkButton}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                                                                    Command="{Binding ShowAllCommand}">
+                                                                                <TextBlock Text="{Binding [clean.showAll], Source={x:Static loc:Loc.Instance}}"/>
+                                                                            </Button>
+                                                                        </StackPanel>
+                                                                        </StackPanel>
                                                                     </Expander>
                                                                 </StackPanel>
                                                                 <TextBlock Grid.Column="2" Text="{Binding SizeText}" FontWeight="SemiBold" Margin="16,0,0,0"

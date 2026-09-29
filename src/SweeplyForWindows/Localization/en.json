@@ -21,6 +21,8 @@
   "clean.nothingFound": "Nothing found",
   "clean.appRunning": "{0} is open — close it to clean this",
   "clean.items": "Items: {0}",
+  "clean.moreItems": "{0} smaller items ({1}) are not listed one by one; they are cleaned together with this category.",
+  "clean.showAll": "Show all",
   "clean.reveal": "Show in File Explorer",
   "clean.selected": "Selected: {0}",
   "clean.found": "Found: {0}",

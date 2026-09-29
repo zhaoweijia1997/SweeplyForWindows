@@ -21,6 +21,8 @@
   "clean.nothingFound": "No se encontró nada",
   "clean.appRunning": "{0} está abierto: ciérralo para limpiar esto",
   "clean.items": "Elementos: {0}",
+  "clean.moreItems": "Hay {0} elementos más pequeños ({1}) que no se muestran uno por uno; se limpian junto con esta categoría.",
+  "clean.showAll": "Mostrar todo",
   "clean.reveal": "Mostrar en el Explorador de archivos",
   "clean.selected": "Seleccionado: {0}",
   "clean.found": "Encontrado: {0}",

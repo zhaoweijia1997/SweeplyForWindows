@@ -21,6 +21,8 @@
   "clean.nothingFound": "見つかりませんでした",
   "clean.appRunning": "{0} が実行中です。閉じるとクリーンアップできます",
   "clean.items": "{0} 項目",
+  "clean.moreItems": "ほかに小さな項目が {0} 個（{1}）あります。一覧には表示していませんが、このカテゴリと一緒にクリーンアップされます。",
+  "clean.showAll": "すべて表示",
   "clean.reveal": "エクスプローラーで表示",
   "clean.selected": "選択済み: {0}",
   "clean.found": "検出: {0}",

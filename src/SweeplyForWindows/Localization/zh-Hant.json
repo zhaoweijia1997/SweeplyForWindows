@@ -21,6 +21,8 @@
   "clean.nothingFound": "沒有找到",
   "clean.appRunning": "{0} 正在執行，關閉它才能清理這一項",
   "clean.items": "共 {0} 項",
+  "clean.moreItems": "另有 {0} 個較小的項目（{1}）沒有逐一列出，會隨這一類一起清理。",
+  "clean.showAll": "全部顯示",
   "clean.reveal": "在檔案總管中顯示",
   "clean.selected": "已選取：{0}",
   "clean.found": "共找到：{0}",

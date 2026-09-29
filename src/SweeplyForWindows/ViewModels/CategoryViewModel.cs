@@ -17,16 +17,29 @@ public sealed class CategoryViewModel : ObservableObject
         ["idea64"] = "IntelliJ IDEA",
     };
 
+    /// <summary>
+    /// Only the largest items are drawn one by one: a card can hold thousands (a chat app's pictures),
+    /// and drawing them all would freeze the page. The rest are still counted and cleaned.
+    /// </summary>
+    private const int ListLimit = 200;
+
     private readonly Action _selectionChanged;
     private CategoryScan? _scan;
     private bool _isSelected;
     private bool _isExpanded;
     private bool _isScanning;
+    private bool _showAll;
 
     public CategoryViewModel(CleanupCategory category, Action selectionChanged)
     {
         Category = category;
         _selectionChanged = selectionChanged;
+        ShowAllCommand = new RelayCommand(_ =>
+        {
+            _showAll = true;
+            OnPropertyChanged(nameof(VisibleItems));
+            OnPropertyChanged(nameof(HasHiddenItems));
+        });
     }
 
     public CleanupCategory Category { get; }
@@ -38,6 +51,19 @@ public sealed class CategoryViewModel : ObservableObject
     public ObservableCollection<ItemViewModel> Items { get; } = new();
 
     public bool HasItems => Items.Count > 0;
+
+    /// <summary>The items drawn in the expanded card: the largest <see cref="ListLimit"/>, or all after "Show all".</summary>
+    public IReadOnlyList<ItemViewModel> VisibleItems =>
+        _showAll || Items.Count <= ListLimit ? Items : Items.Take(ListLimit).ToList();
+
+    public bool HasHiddenItems => !_showAll && Items.Count > ListLimit;
+
+    public string HiddenItemsText => HasHiddenItems
+        ? Loc.Instance.Format("clean.moreItems", Items.Count - ListLimit,
+            SizeFormatter.Format(Items.Skip(ListLimit).Sum(i => i.Item.Bytes), Loc.Instance.Culture))
+        : "";
+
+    public ICommand ShowAllCommand { get; }
     public bool CanSelect => _scan?.Status == ScanStatus.Found;
 
     public bool IsSelected
@@ -100,6 +126,7 @@ public sealed class CategoryViewModel : ObservableObject
         bool keepSelection = _scan is not null;
         bool wasSelected = _isSelected;
         _scan = scan;
+        _showAll = false;
         Items.Clear();
         foreach (var item in scan.Items) Items.Add(new ItemViewModel(item, Loc.Instance.Culture, _selectionChanged));
         _isSelected = CanSelect && (keepSelection ? wasSelected : Category.SelectedByDefault);
@@ -114,8 +141,18 @@ public sealed class CategoryViewModel : ObservableObject
         OnAllPropertiesChanged();
     }
 
-    private static string AppName(string? process) =>
-        process is not null && AppNames.TryGetValue(process, out string? name) ? name : process ?? "?";
+    /// <summary>
+    /// The name people know the app by: from the language files when it differs by language
+    /// ("proc.Weixin" is 微信 / WeChat), otherwise the brand name, otherwise the process name.
+    /// </summary>
+    private static string AppName(string? process)
+    {
+        if (process is null) return "?";
+        string key = $"proc.{process}";
+        string localized = Loc.Instance[key];
+        if (localized != key) return localized;
+        return AppNames.TryGetValue(process, out string? name) ? name : process;
+    }
 }
 
 /// <summary>One file or folder inside a card.</summary>
