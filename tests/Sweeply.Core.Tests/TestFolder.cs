@@ -21,11 +21,20 @@ internal sealed class TestFolder : IDisposable
         string p = Path.Combine(Root, relative);
         Directory.CreateDirectory(Path.GetDirectoryName(p)!);
         System.IO.File.WriteAllBytes(p, new byte[bytes]);
-        if (lastWriteUtc is { } t) System.IO.File.SetLastWriteTimeUtc(p, t);
+        if (lastWriteUtc is { } t)
+        {
+            // An old file is old in both senses: created and last modified back then.
+            System.IO.File.SetCreationTimeUtc(p, t);
+            System.IO.File.SetLastWriteTimeUtc(p, t);
+        }
         return p;
     }
 
-    public static void Age(string directory, DateTime lastWriteUtc) => Directory.SetLastWriteTimeUtc(directory, lastWriteUtc);
+    public static void Age(string directory, DateTime lastWriteUtc)
+    {
+        Directory.SetCreationTimeUtc(directory, lastWriteUtc);
+        Directory.SetLastWriteTimeUtc(directory, lastWriteUtc);
+    }
 
     /// <summary>Creates a directory junction (no admin rights needed). Returns false if it couldn't.</summary>
     public static bool TryJunction(string link, string target)

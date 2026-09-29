@@ -3,6 +3,9 @@ namespace Sweeply.Core;
 /// <summary>The categories Sweeply knows about, resolved against the given user folders.</summary>
 public static class CategoryCatalog
 {
+    /// <summary>How old chat pictures, videos and received files must be before they are offered.</summary>
+    public static readonly TimeSpan HalfAYear = TimeSpan.FromDays(180);
+
     public static IReadOnlyList<CleanupCategory> Create(KnownPaths p)
     {
         string local = p.LocalAppData;
@@ -23,7 +26,7 @@ public static class CategoryCatalog
                 Group = CategoryGroup.System,
                 Roots = new[] { Path.Combine(local, "CrashDumps") },
                 Kind = ItemKind.Files,
-                FilePatterns = new[] { "*.dmp" },
+                NamePatterns = new[] { "*.dmp" },
             },
             new()
             {
@@ -51,6 +54,47 @@ public static class CategoryCatalog
                 Group = CategoryGroup.Browsers,
                 Roots = BrowserCacheRoots(Path.Combine(local, "Google", "Chrome", "User Data")),
                 BlockingProcesses = new[] { "chrome" },
+            },
+
+            // ---- Chat apps (skipped while the app runs; chat history itself is never offered) ----
+            new()
+            {
+                Id = "wechat-cache",
+                Group = CategoryGroup.Chat,
+                Roots = WeChatFolders.CacheRoots(p),
+                BlockingProcesses = WeChatFolders.Processes,
+            },
+            new()
+            {
+                Id = "wechat-logs",
+                Group = CategoryGroup.Chat,
+                Roots = WeChatFolders.LogRoots(p),
+                Kind = ItemKind.Files,
+                NamePatterns = new[] { "*.xlog" },
+                BlockingProcesses = WeChatFolders.Processes,
+            },
+            new()
+            {
+                // By chat and month. Once gone they no longer open on this PC, so only old ones, and not preselected.
+                Id = "wechat-media",
+                Group = CategoryGroup.Chat,
+                Roots = WeChatFolders.MediaRoots(p),
+                Kind = ItemKind.Folders,
+                NamePatterns = new[] { "????-??" },
+                MinimumAge = HalfAYear,
+                BlockingProcesses = WeChatFolders.Processes,
+                SelectedByDefault = false,
+            },
+            new()
+            {
+                Id = "wechat-files",
+                Group = CategoryGroup.Chat,
+                Roots = WeChatFolders.ReceivedFileRoots(p),
+                Kind = ItemKind.Files,
+                NamePatterns = new[] { "*" },
+                MinimumAge = HalfAYear,
+                BlockingProcesses = WeChatFolders.Processes,
+                SelectedByDefault = false,
             },
 
             // ---- Developer tools ----
@@ -97,7 +141,7 @@ public static class CategoryCatalog
                 Group = CategoryGroup.Downloads,
                 Roots = new[] { p.Downloads },
                 Kind = ItemKind.Files,
-                FilePatterns = new[] { "*.exe", "*.msi", "*.msix", "*.msixbundle", "*.appx" },
+                NamePatterns = new[] { "*.exe", "*.msi", "*.msix", "*.msixbundle", "*.appx" },
                 SelectedByDefault = false,
             },
         };

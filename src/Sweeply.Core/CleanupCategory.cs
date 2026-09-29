@@ -4,6 +4,7 @@ public enum CategoryGroup
 {
     System,
     Browsers,
+    Chat,
     Developer,
     Downloads,
 }
@@ -13,9 +14,9 @@ public enum ItemKind
 {
     /// <summary>Every direct child of the root, file or folder.</summary>
     Children,
-    /// <summary>Only direct child files matching <see cref="CleanupCategory.FilePatterns"/>.</summary>
+    /// <summary>Only direct child files matching <see cref="CleanupCategory.NamePatterns"/>.</summary>
     Files,
-    /// <summary>Only direct child folders.</summary>
+    /// <summary>Only direct child folders, and only those matching <see cref="CleanupCategory.NamePatterns"/> if any are given.</summary>
     Folders,
 }
 
@@ -33,12 +34,16 @@ public sealed class CleanupCategory
 
     public ItemKind Kind { get; init; } = ItemKind.Children;
 
-    /// <summary>For <see cref="ItemKind.Files"/>: wildcard patterns such as "*.dmp".</summary>
-    public IReadOnlyList<string> FilePatterns { get; init; } = Array.Empty<string>();
+    /// <summary>
+    /// Wildcard patterns for item names: required for <see cref="ItemKind.Files"/> ("*.dmp"),
+    /// optional for <see cref="ItemKind.Folders"/> ("????-??" for month folders).
+    /// </summary>
+    public IReadOnlyList<string> NamePatterns { get; init; } = Array.Empty<string>();
 
     /// <summary>
-    /// Only items untouched for at least this long are offered (nothing inside modified more recently).
-    /// Used for temp files, which running programs may still be using.
+    /// Only items untouched for at least this long are offered (nothing inside created or modified
+    /// more recently). Used for temp files, which running programs may still be using, and for chat
+    /// pictures and files, where only old ones are offered.
     /// </summary>
     public TimeSpan MinimumAge { get; init; } = TimeSpan.Zero;
 

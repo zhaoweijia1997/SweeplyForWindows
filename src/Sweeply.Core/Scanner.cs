@@ -79,7 +79,7 @@ public static class Scanner
                 CleanupItem item;
                 if (entry is FileInfo file)
                 {
-                    item = new CleanupItem(file.FullName, false, file.Length, file.LastWriteTimeUtc);
+                    item = new CleanupItem(file.FullName, false, file.Length, FileTree.Newest(file));
                 }
                 else
                 {
@@ -103,11 +103,13 @@ public static class Scanner
     internal static bool Matches(CleanupCategory category, FileSystemInfo entry) => category.Kind switch
     {
         ItemKind.Children => true,
-        ItemKind.Folders => entry is DirectoryInfo,
-        ItemKind.Files => entry is FileInfo &&
-            category.FilePatterns.Any(p => FileSystemName.MatchesSimpleExpression(p, entry.Name, ignoreCase: true)),
+        ItemKind.Folders => entry is DirectoryInfo && (category.NamePatterns.Count == 0 || NameMatches(category, entry)),
+        ItemKind.Files => entry is FileInfo && NameMatches(category, entry),
         _ => false,
     };
+
+    private static bool NameMatches(CleanupCategory category, FileSystemInfo entry) =>
+        category.NamePatterns.Any(p => FileSystemName.MatchesSimpleExpression(p, entry.Name, ignoreCase: true));
 }
 
 internal static class FileTree
@@ -123,13 +125,21 @@ internal static class FileTree
         (info.Attributes & FileAttributes.ReparsePoint) != 0;
 
     /// <summary>
-    /// Total size of everything below <paramref name="dir"/> and the newest write time found,
-    /// without following junctions or symbolic links.
+    /// When the item last arrived or changed: the later of its modified and created times. A file
+    /// copied or unpacked a minute ago can carry a modified time from years back; its created time
+    /// says it is new.
+    /// </summary>
+    public static DateTime Newest(FileSystemInfo info) =>
+        info.CreationTimeUtc > info.LastWriteTimeUtc ? info.CreationTimeUtc : info.LastWriteTimeUtc;
+
+    /// <summary>
+    /// Total size of everything below <paramref name="dir"/> and the newest time found
+    /// (see <see cref="Newest"/>), without following junctions or symbolic links.
     /// </summary>
     public static (long Bytes, DateTime NewestWriteUtc) Measure(DirectoryInfo dir)
     {
         long bytes = 0;
-        DateTime newest = dir.LastWriteTimeUtc;
+        DateTime newest = Newest(dir);
         var pending = new Stack<DirectoryInfo>();
         pending.Push(dir);
         while (pending.Count > 0)
@@ -141,7 +151,8 @@ internal static class FileTree
 
             foreach (var child in children)
             {
-                if (child.LastWriteTimeUtc > newest) newest = child.LastWriteTimeUtc;
+                DateTime time = Newest(child);
+                if (time > newest) newest = time;
                 if (IsReparsePoint(child)) continue;
                 if (child is FileInfo f) bytes += f.Length;
                 else if (child is DirectoryInfo d) pending.Push(d);

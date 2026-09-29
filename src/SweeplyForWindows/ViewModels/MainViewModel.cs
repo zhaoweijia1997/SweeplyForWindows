@@ -561,6 +561,8 @@ public sealed class MainViewModel : ObservableObject
     {
         const string temp = @"C:\Users\Alex\AppData\Local\Temp";
         const string local = @"C:\Users\Alex\AppData\Local";
+        const string roaming = @"C:\Users\Alex\AppData\Roaming";
+        const string wechat = @"C:\Users\Alex\Documents\xwechat_files\alex_1234";
         var old = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
         CleanupItem Dir(string path, double mb) => new(path, true, (long)(mb * 1024 * 1024), old);
         CleanupItem File(string path, double mb) => new(path, false, (long)(mb * 1024 * 1024), old);
@@ -572,6 +574,10 @@ public sealed class MainViewModel : ObservableObject
             ["error-reports"] = (ScanStatus.Found, new[] { Dir($@"{local}\Microsoft\Windows\WER\ReportArchive\AppCrash_game.exe_1f2e", 18.5) }, null),
             ["edge-cache"] = (ScanStatus.BlockedByRunningApp, Array.Empty<CleanupItem>(), "msedge"),
             ["chrome-cache"] = (ScanStatus.Found, new[] { Dir($@"{local}\Google\Chrome\User Data\Default\Cache", 640), Dir($@"{local}\Google\Chrome\User Data\Default\Code Cache", 188) }, null),
+            ["wechat-cache"] = (ScanStatus.Found, new[] { Dir($@"{roaming}\Tencent\xwechat\radium\web\profiles\multitab_3f2a\Cache\Cache_Data", 363), Dir($@"{wechat}\cache\2026-08", 96) }, null),
+            ["wechat-logs"] = (ScanStatus.Found, new[] { File($@"{roaming}\Tencent\xwechat\log\mm_20260928.xlog", 85.7), File($@"{roaming}\Tencent\xwechat\log\mm_20260927.xlog", 51.3) }, null),
+            ["wechat-media"] = (ScanStatus.Found, new[] { Dir($@"{wechat}\msg\video\2025-12", 1240), Dir($@"{wechat}\msg\attach\9e20f4ab51c7d3e8\2025-11", 412) }, null),
+            ["wechat-files"] = (ScanStatus.NothingFound, Array.Empty<CleanupItem>(), null),
             ["npm-cache"] = (ScanStatus.Found, new[] { Dir($@"{local}\npm-cache\_cacache", 1310) }, null),
             ["pip-cache"] = (ScanStatus.NothingFound, Array.Empty<CleanupItem>(), null),
             ["nuget-cache"] = (ScanStatus.Found, new[] { Dir($@"{local}\NuGet\v3-cache", 452) }, null),

@@ -35,6 +35,10 @@ shows you exactly what they are, and never deletes anything until you choose to.
 **Browsers**
 - Microsoft Edge and Google Chrome disk caches — history, passwords and sign-ins are kept
 
+**Chat apps**
+- WeChat (current and older versions): cache and logs; chat pictures, videos and received files
+  over 6 months old, which are not selected by default. Chat history itself is never touched.
+
 **Developer tools**
 - npm, pip, NuGet, Yarn and Gradle caches
 
@@ -46,14 +50,19 @@ show it in File Explorer, or untick the ones you want to keep.
 
 ## Safety first
 
-- **Nothing is deleted without you.** Sweeply only scans until you pick what to clean and confirm.
+- **Nothing is moved without you.** Sweeply only scans. Before anything moves, you see the full list
+  of what would go, can untick any item or save the list, and then confirm.
 - **Everything goes to the Recycle Bin**, so you can restore it. If something is too big for the
   Recycle Bin, Windows asks you first instead of deleting it for good.
+- **Undo.** The last 5 cleans can be undone: what was moved goes back where it was, as long as it
+  is still in the Recycle Bin.
+- **A "Never clean" list.** Add folders in Settings, or press the lock next to an item. Anything on
+  the list, or inside it, is never offered or moved.
 - **Checked twice.** Right before moving, each item is checked again: still inside its category's
-  folder, not a link to somewhere else, on this PC's own disk, and its app not running.
-  Temporary files must also still be untouched for a day.
+  folder, not a link to somewhere else, on this PC's own disk, not on the "Never clean" list, and
+  its app not running. Items that must be old enough (temporary files, old chat pictures) still have to be.
 - **Only this PC's own disks.** USB sticks and network drives are never touched.
-- **Browsers are left alone while they're open**, and files in use are skipped.
+- **Apps are left alone while they're open** (browsers, WeChat), and files in use are skipped.
 - **Works offline.** No network requests, no analytics, no accounts.
 
 ## Runs quietly in the background

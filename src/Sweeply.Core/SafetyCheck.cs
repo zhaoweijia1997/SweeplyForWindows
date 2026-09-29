@@ -68,7 +68,7 @@ public static class SafetyCheck
 
         if (category.MinimumAge > TimeSpan.Zero)
         {
-            DateTime newest = info is DirectoryInfo d ? FileTree.Measure(d).NewestWriteUtc : info.LastWriteTimeUtc;
+            DateTime newest = info is DirectoryInfo d ? FileTree.Measure(d).NewestWriteUtc : FileTree.Newest(info);
             if (nowUtc - newest < category.MinimumAge) return SafetyVerdict.TooRecent;
         }
 

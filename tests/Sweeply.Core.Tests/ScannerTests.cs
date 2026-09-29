@@ -45,7 +45,7 @@ public class ScannerTests
         var cat = new CleanupCategory
         {
             Id = "d", Group = CategoryGroup.System, Roots = new[] { root },
-            Kind = ItemKind.Files, FilePatterns = new[] { "*.dmp" },
+            Kind = ItemKind.Files, NamePatterns = new[] { "*.dmp" },
         };
 
         var scan = Scanner.Scan(cat, Now, NothingRuns);
