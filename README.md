@@ -23,7 +23,8 @@ shows you exactly what they are, and never deletes anything until you choose to.
   <img src="docs/screenshots/clean-en-light.png" width="760" alt="SweeplyForWindows showing cleanup categories and their sizes">
 </p>
 
-> **Status: early preview (0.1).** Cleaning works; more categories and a system overview are coming.
+> **Status: preview (0.2).** Cleaning, background mode and the activity monitor work;
+> many more cleanup categories (including chat apps like WeChat) are coming next.
 
 ## What it finds
 
@@ -54,6 +55,27 @@ show it in File Explorer, or untick the ones you want to keep.
 - **Only this PC's own disks.** USB sticks and network drives are never touched.
 - **Browsers are left alone while they're open**, and files in use are skipped.
 - **Works offline.** No network requests, no analytics, no accounts.
+
+## Runs quietly in the background
+
+<p align="center">
+  <img src="docs/screenshots/settings-en-light.png" width="760" alt="Settings page with background and activity monitor options">
+</p>
+
+- **Stays in the notification area.** Closing the window keeps it there; right-click the icon to exit.
+  You can turn this off in Settings.
+- **Start with Windows** (off by default): starts as an icon only when you sign in.
+  Nothing is scanned or cleaned until you ask.
+- **Activity monitor**, every part optional:
+  - a live number on the icon: CPU usage, download or upload speed, or disk writes;
+  - download and upload speed, CPU usage and disk writes when you point at the icon;
+  - a small floating bar that stays on top of other windows. Drag it anywhere; right-click it to hide it.
+
+<p align="center">
+  <img src="docs/screenshots/monitor-bar.png" width="380" alt="Floating bar showing download, upload, CPU and disk writes">
+</p>
+
+The readings come from Windows itself (performance counters and network adapters) and never leave your PC.
 
 ## Made for Windows
 
