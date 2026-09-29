@@ -71,10 +71,12 @@ public partial class App : Application
         }
 
         // A second launch (Start menu, start-up, later the folder menu) only wakes the running copy.
+        // "--exit" instead asks the running copy to close, e.g. before its file is replaced by a newer one.
         var instance = new SingleInstance("SweeplyForWindows");
-        if (!instance.IsFirst)
+        bool exitRequest = e.Args.Contains("--exit");
+        if (!instance.IsFirst || exitRequest)
         {
-            instance.SendToFirst(e.Args);
+            if (!instance.IsFirst) instance.SendToFirst(e.Args);
             instance.Dispose();
             Shutdown(0);
             return;
@@ -107,7 +109,11 @@ public partial class App : Application
         _monitor.Apply();
         _tray.Show();
 
-        instance.Listen(args => Dispatcher.BeginInvoke(() => ShowMainWindow()));
+        instance.Listen(args => Dispatcher.BeginInvoke(() =>
+        {
+            if (args.Contains("--exit")) ExitApp();
+            else ShowMainWindow();
+        }));
 
         if (!e.Args.Contains(Autostart.BackgroundArg))
             ShowMainWindow();
