@@ -6,6 +6,7 @@ public enum CategoryGroup
     Browsers,
     Chat,
     Developer,
+    Apps,
     Downloads,
 }
 

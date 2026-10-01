@@ -160,7 +160,7 @@ public class WeChatTests : IDisposable
     public void Nothing_is_scanned_while_WeChat_runs()
     {
         foreach (string process in new[] { "Weixin", "WeChat" })
-        foreach (var c in CategoryCatalog.Create(_paths).Where(c => c.Group == CategoryGroup.Chat))
+        foreach (var c in CategoryCatalog.Create(_paths).Where(c => c.Id.StartsWith("wechat-", StringComparison.Ordinal)))
         {
             var scan = Scanner.Scan(c, Now, name => name == process);
             Assert.Equal(ScanStatus.BlockedByRunningApp, scan.Status);

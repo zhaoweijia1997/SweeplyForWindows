@@ -39,6 +39,27 @@ public static class CategoryCatalog
                 },
                 Kind = ItemKind.Folders,
             },
+            new()
+            {
+                // DirectX and the graphics drivers compile shaders once and keep them here. Rebuilt the next
+                // time a game or app needs them (that first start may take a little longer).
+                Id = "gpu-shader-cache",
+                Group = CategoryGroup.System,
+                Roots = new[]
+                {
+                    Path.Combine(local, "D3DSCache"),
+                    Path.Combine(local, "NVIDIA", "DXCache"),
+                    Path.Combine(local, "NVIDIA", "GLCache"),
+                    Path.Combine(local, "NVIDIA Corporation", "NV_Cache"),
+                    Path.Combine(local, "AMD", "DxCache"),
+                    Path.Combine(local, "AMD", "DxcCache"),
+                    Path.Combine(local, "AMD", "GLCache"),
+                    Path.Combine(local, "AMD", "VkCache"),
+                    Path.Combine(p.UserProfile, "AppData", "LocalLow", "Intel", "ShaderCache"),
+                    Path.Combine(local, "Intel", "ShaderCache"),
+                },
+                MinimumAge = TimeSpan.FromDays(1), // a running game may be writing to its newest ones
+            },
 
             // ---- Browsers (skipped while the browser runs) ----
             new()
@@ -162,6 +183,52 @@ public static class CategoryCatalog
                 BlockingProcesses = WeChatFolders.Processes,
                 SelectedByDefault = false,
             },
+            new()
+            {
+                Id = "wecom-cache",
+                Group = CategoryGroup.Chat,
+                Roots = WeComFolders.CacheRoots(p),
+                BlockingProcesses = WeComFolders.Processes,
+            },
+            new()
+            {
+                Id = "wecom-logs",
+                Group = CategoryGroup.Chat,
+                Roots = WeComFolders.LogRoots(p),
+                Kind = ItemKind.Files,
+                NamePatterns = new[] { "*.log", "*.xlog" },
+                BlockingProcesses = WeComFolders.Processes,
+            },
+            new()
+            {
+                Id = "wecom-media",
+                Group = CategoryGroup.Chat,
+                Roots = WeComFolders.MediaRoots(p),
+                Kind = ItemKind.Folders,
+                NamePatterns = new[] { "????-??" },
+                MinimumAge = HalfAYear,
+                BlockingProcesses = WeComFolders.Processes,
+                SelectedByDefault = false,
+            },
+            new()
+            {
+                Id = "wecom-files",
+                Group = CategoryGroup.Chat,
+                Roots = WeComFolders.ReceivedFileRoots(p),
+                Kind = ItemKind.Files,
+                NamePatterns = new[] { "*" },
+                MinimumAge = HalfAYear,
+                BlockingProcesses = WeComFolders.Processes,
+                SelectedByDefault = false,
+            },
+            // Apps built on Chromium: only folders that look like a Chromium cache inside (see ChromiumCaches).
+            WebCache("qq-cache", CategoryGroup.Chat, new[] { "QQ" },
+                Path.Combine(p.Roaming, "QQ")),
+            WebCache("dingtalk-cache", CategoryGroup.Chat, new[] { "DingTalk" },
+                Path.Combine(p.Roaming, "DingTalk"), Path.Combine(local, "DingTalk")),
+            WebCache("feishu-cache", CategoryGroup.Chat, new[] { "Feishu", "Lark" },
+                Path.Combine(p.Roaming, "LarkShell"), Path.Combine(local, "LarkShell"),
+                Path.Combine(p.Roaming, "Feishu"), Path.Combine(local, "Feishu")),
 
             // ---- Developer tools ----
             new()
@@ -199,6 +266,57 @@ public static class CategoryCatalog
                 Roots = new[] { Path.Combine(p.UserProfile, ".gradle", "caches") },
                 BlockingProcesses = new[] { "studio64", "idea64" },
             },
+            new()
+            {
+                // VS Code and the editors built from it: web caches, compiled-code caches of past versions,
+                // downloaded extension packages, crash dumps and dated log folders. Settings ("User") and
+                // what extensions store ("WebStorage") are never offered.
+                Id = "vscode-cache",
+                Group = CategoryGroup.Developer,
+                Roots = new[] { "Code", "Code - Insiders", "VSCodium", "Cursor" }
+                    .Select(name => Path.Combine(p.Roaming, name))
+                    .SelectMany(dir => ChromiumCaches.Find(dir, 1).Concat(new[]
+                    {
+                        Path.Combine(dir, "CachedData"),
+                        Path.Combine(dir, "CachedExtensionVSIXs"),
+                        Path.Combine(dir, "Crashpad", "reports"),
+                        Path.Combine(dir, "logs"),
+                    }))
+                    .ToList(),
+                BlockingProcesses = new[] { "Code", "Code - Insiders", "VSCodium", "Cursor" },
+            },
+            new()
+            {
+                Id = "go-cache",
+                Group = CategoryGroup.Developer,
+                Roots = new[] { Path.Combine(local, "go-build") },
+            },
+            new()
+            {
+                // Downloaded crates and their unpacked sources; cargo fetches them again when a build needs them.
+                Id = "cargo-cache",
+                Group = CategoryGroup.Developer,
+                Roots = new[]
+                {
+                    Path.Combine(p.UserProfile, ".cargo", "registry", "cache"),
+                    Path.Combine(p.UserProfile, ".cargo", "registry", "src"),
+                },
+                BlockingProcesses = new[] { "cargo" },
+            },
+
+            // ---- Other apps: built-in web caches only ----
+            WebCache("steam-cache", CategoryGroup.Apps, new[] { "steam", "steamwebhelper" },
+                Path.Combine(local, "Steam")),
+            WebCache("discord-cache", CategoryGroup.Apps, new[] { "Discord" },
+                Path.Combine(p.Roaming, "discord")),
+            WebCache("slack-cache", CategoryGroup.Apps, new[] { "slack" },
+                Path.Combine(p.Roaming, "Slack")),
+            WebCache("spotify-cache", CategoryGroup.Apps, new[] { "Spotify" },
+                Path.Combine(p.Roaming, "Spotify"), Path.Combine(local, "Spotify")),
+            WebCache("teams-cache", CategoryGroup.Apps, new[] { "Teams" },
+                Path.Combine(p.Roaming, "Microsoft", "Teams")),
+            WebCache("cloudmusic-cache", CategoryGroup.Apps, new[] { "cloudmusic" },
+                Path.Combine(local, "NetEase", "CloudMusic")),
 
             // ---- Downloads (never selected by default) ----
             new()
@@ -212,6 +330,18 @@ public static class CategoryCatalog
             },
         };
     }
+
+    /// <summary>
+    /// An app built on Chromium: the Chromium caches found under its folders (see <see cref="ChromiumCaches"/>),
+    /// skipped while the app runs. Its own data next to them is never offered.
+    /// </summary>
+    private static CleanupCategory WebCache(string id, CategoryGroup group, string[] processes, params string[] appFolders) => new()
+    {
+        Id = id,
+        Group = group,
+        Roots = ChromiumCaches.FindAll(appFolders),
+        BlockingProcesses = processes,
+    };
 
     /// <summary>The disk caches inside every Chromium profile folder (Default, Profile 1, ...) of each "User Data" folder.</summary>
     private static IReadOnlyList<string> BrowserCacheRoots(params string[] userDataFolders)

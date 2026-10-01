@@ -20,6 +20,13 @@ public sealed class CategoryViewModel : ObservableObject
         ["browser"] = "Yandex Browser",
         ["studio64"] = "Android Studio",
         ["idea64"] = "IntelliJ IDEA",
+        ["Code"] = "VS Code",
+        ["Code - Insiders"] = "VS Code Insiders",
+        ["cargo"] = "Cargo",
+        ["steam"] = "Steam",
+        ["steamwebhelper"] = "Steam",
+        ["slack"] = "Slack",
+        ["Teams"] = "Microsoft Teams",
     };
 
     /// <summary>
