@@ -23,30 +23,60 @@ SweeplyForWindows 找出可以放心删除的缓存、临时文件和开发工�
   <img src="docs/screenshots/clean-zh-Hans-light.png" width="760" alt="SweeplyForWindows 清理页，显示各类垃圾和大小">
 </p>
 
-> **状态：预览版（0.2）。**清理、后台常驻和性能监控都已可用；
-> 下一步是大量补充清理类别（包括微信等聊天软件）。
+> **状态：预览版（0.3）。**清理、一键撤销、"永远不清理"列表、文件夹右键清理、定期提醒、
+> 后台常驻和性能监控都已可用。
 
 ## 能找到什么
 
 **Windows**
 - 程序留下的临时文件（只列出一天以上没动过的）
 - 崩溃转储和 Windows 错误报告
+- Windows 和 NVIDIA、AMD、Intel 显卡驱动的着色器缓存
 
 **浏览器**
 - Microsoft Edge、Google Chrome、Firefox、Brave、Vivaldi、Opera、Yandex、360 浏览器和 QQ 浏览器的磁盘缓存：历史记录、密码和登录状态都保留
 
 **聊天软件**
-- 微信（新版和旧版）：缓存和日志；半年前的聊天图片、视频和收到的文件，这几类默认不勾选。聊天记录本身一律不碰。
+- 微信（新版和旧版）和企业微信：缓存和日志；半年前的聊天图片、视频和收到的文件，这几类默认不勾选。聊天记录、文档和微盘同步文件一律不碰。
+- QQ、钉钉、飞书：内置浏览器的缓存
 
 **开发工具**
-- npm、pip、NuGet、Yarn 和 Gradle 缓存
+- npm、pip、NuGet、Yarn、Gradle、Go 和 Cargo 缓存
+- VS Code、VSCodium、Cursor：缓存、旧日志、崩溃报告和扩展安装包；设置、已装扩展和工作区都保留
+
+**其他软件**
+- Steam、Discord、Slack、Spotify、Microsoft Teams、网易云音乐：内置浏览器的缓存。文件夹里确实是缓存才算，不看名字。
 
 **下载**
 - 下载文件夹里的安装包（.exe、.msi、.msix），默认不勾选
 
 电脑上没装的软件不会显示。每一类都写清楚它是什么、清掉后会不会再生成。展开可以看到每一项，能在文件资源管理器里打开，也能取消勾选想保留的。
 
+## 清理项目文件夹
+
+<p align="center">
+  <img src="docs/screenshots/folder-zh-Hans-light.png" width="760" alt="在一个文件夹里找到的残留：node_modules、.NET 编译输出、Rust 编译输出">
+</p>
+
+在**设置 → 文件资源管理器 → 加到文件夹右键菜单**打开后，在文件夹上（或文件夹里的空白处）点右键，
+选**用 SweeplyForWindows 清理**，它会在这个文件夹里找：
+
+- `package.json` 旁边的 `node_modules`
+- .NET 项目文件旁边的 `bin` 和 `obj`
+- `Cargo.toml` 或 `pom.xml` 旁边的 `target`；`build.gradle` 旁边的 `build` 和 `.gradle`
+- Python 缓存：`__pycache__`、`.pytest_cache`、`.mypy_cache`、`.ruff_cache`
+- 一天以上没动过的 Office 临时文件（`~$…`）以及 `.tmp`、`Thumbs.db`、`.DS_Store`
+
+编译输出文件夹必须挨着生成它的项目文件才算，你自己建的叫 `build`、`bin` 的文件夹不会被列出。
+`node_modules` 和 .NET 的 `bin`/`obj` 默认不勾选。以点开头的文件夹（`.git`、`.vscode` 等）一律不进去看，
+Windows、Program Files 和软件数据目录根本不让扫。清单确认、回收站、一键撤销照样适用。
+Windows 11 上这一项在**显示更多选项**里。
+
 ## 安全第一
+
+<p align="center">
+  <img src="docs/screenshots/review-zh-Hans-light.png" width="760" alt="移走之前先列出完整清单">
+</p>
 
 - **你不点确定，什么都不会动。**Sweeply 只负责扫描。移走之前会列出完整清单，可以取消勾选任意一项、导出清单，确认后才动手。
 - **删除的东西都进回收站**，随时可以还原。如果某项太大进不了回收站，Windows 会先问你，而不是直接永久删除。
@@ -65,6 +95,7 @@ SweeplyForWindows 找出可以放心删除的缓存、临时文件和开发工�
 
 - **常驻通知区域（屏幕右下角）。**关掉窗口它还在，右键图标选"退出"才真正关闭；也可以在"设置"里改成关窗即退出。
 - **开机自动启动**（默认关）：登录后只以图标的形式启动，你不点，它不会扫描也不会清理。
+- **定期提醒清理**（默认关）：每周或每月看一次（只看不动），能清出 1 GB 以上时弹通知。手动清理过一次，就重新开始计时。
 - **网速与性能监控**，每一项都可以单独开关：
   - 托盘图标上显示一个实时数字：CPU 占用、下载速度、上传速度或磁盘写入；
   - 鼠标指向图标时显示下载、上传速度，CPU 占用和磁盘写入；

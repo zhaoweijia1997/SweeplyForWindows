@@ -13,6 +13,15 @@ public enum TrayDisplay
     DiskWrite,
 }
 
+/// <summary>A choice of "Remind me to clean up" in the Settings page list, named in the current language.</summary>
+public sealed class ReminderOption : ObservableObject
+{
+    public ReminderOption(Sweeply.Core.ReminderInterval value) => Value = value;
+    public Sweeply.Core.ReminderInterval Value { get; }
+    public string Name => Loc.Instance[$"reminder.{Value}"];
+    public void Relocalize() => OnPropertyChanged(nameof(Name));
+}
+
 /// <summary>One choice in the Settings page list, named in the current language.</summary>
 public sealed class TrayDisplayOption : ObservableObject
 {

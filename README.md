@@ -23,25 +23,34 @@ shows you exactly what they are, and never deletes anything until you choose to.
   <img src="docs/screenshots/clean-en-light.png" width="760" alt="SweeplyForWindows showing cleanup categories and their sizes">
 </p>
 
-> **Status: preview (0.2).** Cleaning, background mode and the activity monitor work;
-> many more cleanup categories (including chat apps like WeChat) are coming next.
+> **Status: preview (0.3).** Cleaning, undo, the "Never clean" list, the folder right-click menu,
+> clean-up reminders, background mode and the activity monitor all work.
 
 ## What it finds
 
 **Windows**
 - Temporary files programs left behind (only items untouched for a day)
 - Crash dumps and Windows error reports
+- Graphics shader caches of Windows and the NVIDIA, AMD and Intel drivers
 
 **Browsers**
 - Disk caches of Microsoft Edge, Google Chrome, Firefox, Brave, Vivaldi, Opera, Yandex Browser,
   360 Browser and QQ Browser — history, passwords and sign-ins are kept
 
 **Chat apps**
-- WeChat (current and older versions): cache and logs; chat pictures, videos and received files
-  over 6 months old, which are not selected by default. Chat history itself is never touched.
+- WeChat (current and older versions) and WeCom: cache and logs; chat pictures, videos and
+  received files over 6 months old, which are not selected by default. Chat history, documents
+  and synced files are never touched.
+- QQ, DingTalk and Feishu / Lark: the caches of their built-in browsers
 
 **Developer tools**
-- npm, pip, NuGet, Yarn and Gradle caches
+- npm, pip, NuGet, Yarn, Gradle, Go and Cargo caches
+- VS Code, VSCodium and Cursor: caches, old logs, crash reports and extension downloads —
+  settings, extensions and workspaces are kept
+
+**Other apps**
+- Steam, Discord, Slack, Spotify, Microsoft Teams and NetEase Cloud Music: the caches of their
+  built-in browsers. A folder only counts when what is inside really is a cache, not because of its name.
 
 **Downloads**
 - Installers (.exe, .msi, .msix) in your Downloads folder — not selected by default
@@ -49,7 +58,33 @@ shows you exactly what they are, and never deletes anything until you choose to.
 Apps that are not on your PC are not shown. Each category explains what it is and whether it comes back. Expand it to see every item,
 show it in File Explorer, or untick the ones you want to keep.
 
+## Clean up a project folder
+
+<p align="center">
+  <img src="docs/screenshots/folder-en-light.png" width="760" alt="Leftovers found in one folder: node_modules, .NET build output, Rust build output">
+</p>
+
+Turn on **Settings → File Explorer → Add to the folder right-click menu**, then right-click a folder
+(or empty space inside one) and choose **Clean up with SweeplyForWindows**. It looks through that
+folder for:
+
+- `node_modules` next to a `package.json`
+- `bin` and `obj` next to a .NET project file
+- `target` next to `Cargo.toml` or `pom.xml`; `build` and `.gradle` next to `build.gradle`
+- Python caches: `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`
+- Office owner files (`~$…`), and `.tmp`, `Thumbs.db` and `.DS_Store`, untouched for a day
+
+A build folder only counts next to the project file that creates it, so your own folder called
+`build` or `bin` is never offered. `node_modules` and .NET `bin`/`obj` are not ticked by default.
+Folders starting with a dot (`.git`, `.vscode`…) are never looked into, and Windows, Program Files
+and app data can't be scanned at all. The same list, Recycle Bin and undo apply.
+On Windows 11 the entry is under **Show more options**.
+
 ## Safety first
+
+<p align="center">
+  <img src="docs/screenshots/review-en-light.png" width="760" alt="The full list of what would be moved, shown before anything moves">
+</p>
 
 - **Nothing is moved without you.** Sweeply only scans. Before anything moves, you see the full list
   of what would go, can untick any item or save the list, and then confirm.
@@ -76,6 +111,8 @@ show it in File Explorer, or untick the ones you want to keep.
   You can turn this off in Settings.
 - **Start with Windows** (off by default): starts as an icon only when you sign in.
   Nothing is scanned or cleaned until you ask.
+- **Clean-up reminder** (off by default): every week or month it looks — only reads — and shows a
+  notification when at least 1 GB can be cleaned. Cleaning by hand starts the wait again.
 - **Activity monitor**, every part optional:
   - a live number on the icon: CPU usage, download or upload speed, or disk writes;
   - download and upload speed, CPU usage and disk writes when you point at the icon;

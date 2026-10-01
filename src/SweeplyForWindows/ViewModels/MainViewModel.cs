@@ -267,6 +267,34 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>Raised when "Remind me to clean up" changed.</summary>
+    public event Action? ReminderSettingsChanged;
+
+    public IReadOnlyList<ReminderOption> ReminderOptions { get; } =
+        Enum.GetValues<ReminderInterval>().Select(r => new ReminderOption(r)).ToList();
+
+    /// <summary>Settings page: how often to look and say when enough can be cleaned.</summary>
+    public ReminderInterval SelectedReminder
+    {
+        get => _sampleMode ? ReminderInterval.Off : _settings.CleanReminder;
+        set
+        {
+            if (_settings.CleanReminder == value) return;
+            _settings.CleanReminder = value;
+            _settings.LastReminderUtc = DateTime.UtcNow; // the wait starts now
+            _settings.Save();
+            OnPropertyChanged();
+            ReminderSettingsChanged?.Invoke();
+        }
+    }
+
+    /// <summary>After a reminder was clicked: show up-to-date results (the window may have been open for days).</summary>
+    public async Task RefreshAfterReminderAsync()
+    {
+        if (IsFolderMode || IsReviewing || IsBusy) return;
+        await ScanAsync();
+    }
+
     /// <summary>Raised when a Settings-page choice about the activity monitor changed.</summary>
     public event Action? MonitorSettingsChanged;
 
@@ -562,6 +590,8 @@ public sealed class MainViewModel : ObservableObject
             };
             _history.Add(_lastRecord);
             RefreshHistory();
+            _settings.LastReminderUtc = DateTime.UtcNow; // just cleaned: the reminder waits a full week or month again
+            _settings.Save();
         }
 
         string moved = SizeFormatter.Format(outcome.MovedBytes, Loc.Instance.Culture);
@@ -675,6 +705,7 @@ public sealed class MainViewModel : ObservableObject
             foreach (var c in g.Categories) c.Relocalize();
         }
         foreach (var option in TrayDisplayOptions) option.Relocalize();
+        foreach (var option in ReminderOptions) option.Relocalize();
         RefreshHistory();
         OnAllPropertiesChanged();
     }
@@ -786,7 +817,6 @@ public sealed class MainViewModel : ObservableObject
             group.Add(vm);
         }
         Groups.Add(group);
-        group.Categories.First(c => c.Id == "folder-target").IsExpanded = true;
         HasScanned = true;
     }
 }

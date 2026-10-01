@@ -53,5 +53,9 @@ public class LocalizationTests
         }
         foreach (var g in Enum.GetNames<CategoryGroup>())
             Assert.Contains($"clean.group.{g}", en.Keys);
+        foreach (var r in Enum.GetNames<ReminderInterval>())
+            Assert.Contains($"reminder.{r}", en.Keys);
+        foreach (var c in Enum.GetNames<FolderCheck>().Where(c => c != nameof(FolderCheck.Ok)))
+            Assert.Contains($"clean.folder.{c}", en.Keys);
     }
 }

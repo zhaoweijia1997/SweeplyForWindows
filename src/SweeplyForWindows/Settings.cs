@@ -31,6 +31,13 @@ public sealed class Settings
 
     public bool ShowMonitorBar { get; set; }
 
+    /// <summary>How often to look and say when enough can be cleaned.</summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public Sweeply.Core.ReminderInterval CleanReminder { get; set; } = Sweeply.Core.ReminderInterval.Off;
+
+    /// <summary>The last look for the reminder, or the last clean; the wait counts from here.</summary>
+    public DateTime? LastReminderUtc { get; set; }
+
     /// <summary>Where the floating bar was last dragged to (device-independent pixels).</summary>
     public double? MonitorBarLeft { get; set; }
     public double? MonitorBarTop { get; set; }

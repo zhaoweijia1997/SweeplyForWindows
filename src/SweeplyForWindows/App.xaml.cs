@@ -23,6 +23,8 @@ public partial class App : Application
     private MainWindow? _window;
     private TrayIcon? _tray;
     private MonitorController? _monitor;
+    private ReminderController? _reminder;
+    private bool _reminderPending; // the last notification was a reminder
     private bool _exiting;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -99,7 +101,14 @@ public partial class App : Application
         _tray = new TrayIcon();
         _tray.SetToolTip("SweeplyForWindows");
         _tray.Clicked += ShowMainWindow;
-        _tray.NotificationClicked += ShowMainWindow;
+        _tray.NotificationClicked += () =>
+        {
+            ShowMainWindow();
+            if (!_reminderPending) return;
+            _reminderPending = false;
+            _viewModel.PageIndex = 0;
+            _ = _viewModel.RefreshAfterReminderAsync();
+        };
         _tray.MenuRequested += ShowTrayMenu;
 
         // Icon number, icon details and the floating bar; the Settings page, the icon's menu and
@@ -109,6 +118,11 @@ public partial class App : Application
         _monitor.HideBarRequested += () => _viewModel.ShowMonitorBar = false;
         _viewModel.MonitorSettingsChanged += _monitor.Apply;
         _monitor.Apply();
+
+        _reminder = new ReminderController(_settings, _tray, KnownPaths.FromSystem());
+        _reminder.Shown += () => _reminderPending = true;
+        _viewModel.ReminderSettingsChanged += _reminder.Apply;
+        _reminder.Apply();
         _tray.Show();
 
         instance.Listen(args => Dispatcher.BeginInvoke(() =>
@@ -163,6 +177,7 @@ public partial class App : Application
         _window!.Hide();
         if (!_settings.TrayHintShown)
         {
+            _reminderPending = false; // this notification replaces any reminder
             _tray?.ShowNotification(Loc.Instance["tray.hint.title"], Loc.Instance["tray.hint.body"]);
             _settings.TrayHintShown = true;
             _settings.Save();
@@ -174,6 +189,7 @@ public partial class App : Application
         if (_exiting) return;
         _exiting = true;
         _monitor?.Dispose();
+        _reminder?.Dispose();
         _tray?.Dispose();
         _instance?.Dispose();
         Shutdown(0);

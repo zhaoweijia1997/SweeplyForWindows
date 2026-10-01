@@ -431,6 +431,23 @@
                             </CheckBox>
                         </Border>
 
+                        <Border Style="{StaticResource Card}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding [settings.reminder], Source={x:Static loc:Loc.Instance}}" FontWeight="SemiBold" FontSize="14"/>
+                                    <TextBlock Style="{StaticResource Secondary}" Margin="0,3,0,0"
+                                               Text="{Binding [settings.reminder.desc], Source={x:Static loc:Loc.Instance}}"/>
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" MinWidth="200" Margin="16,0,0,0" VerticalAlignment="Center"
+                                          ItemsSource="{Binding ReminderOptions}" DisplayMemberPath="Name"
+                                          SelectedValuePath="Value" SelectedValue="{Binding SelectedReminder}"/>
+                            </Grid>
+                        </Border>
+
                         <TextBlock Text="{Binding [settings.section.explorer], Source={x:Static loc:Loc.Instance}}"
                                    FontWeight="SemiBold" FontSize="14" Margin="2,22,0,8"/>
                         <Border Style="{StaticResource Card}">
