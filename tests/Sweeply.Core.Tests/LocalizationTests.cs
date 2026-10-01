@@ -46,7 +46,7 @@ public class LocalizationTests
     {
         var en = Load("en");
         var paths = new KnownPaths(@"C:\t", @"C:\l", @"C:\u", @"C:\d");
-        foreach (var c in CategoryCatalog.Create(paths))
+        foreach (var c in CategoryCatalog.Create(paths).Concat(FolderJunk.Find(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")), Array.Empty<string>(), out _)))
         {
             Assert.Contains($"cat.{c.Id}.name", en.Keys);
             Assert.Contains($"cat.{c.Id}.desc", en.Keys);

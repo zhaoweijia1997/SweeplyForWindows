@@ -121,9 +121,15 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [clean.title], Source={x:Static loc:Loc.Instance}}"/>
-                            <TextBlock Style="{StaticResource Secondary}" Margin="0,6,0,0"
-                                       Text="{Binding [app.tagline], Source={x:Static loc:Loc.Instance}}"/>
+                            <TextBlock Style="{StaticResource PageTitle}" Text="{Binding PageTitle}"/>
+                            <!-- The tagline, or the folder chosen from the folder right-click menu. -->
+                            <TextBlock Style="{StaticResource Secondary}" Margin="0,6,0,0" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                       Text="{Binding PageSubtitle}" ToolTip="{Binding PageSubtitle}"/>
+                            <Button Style="{StaticResource LinkButton}" HorizontalAlignment="Left" Margin="0,6,0,0"
+                                    Command="{Binding LeaveFolderCommand}"
+                                    Visibility="{Binding IsFolderMode, Converter={StaticResource TrueVisibility}}">
+                                <TextBlock Text="{Binding [clean.folder.back], Source={x:Static loc:Loc.Instance}}"/>
+                            </Button>
                         </StackPanel>
                         <Button Grid.Column="1" VerticalAlignment="Top" MinWidth="120" Padding="16,6" Margin="16,4,0,0"
                                 Content="{Binding ScanButtonText}" Command="{Binding ScanCommand}"/>
@@ -249,7 +255,8 @@
                                     <!-- While scanning or moving: the same line shows progress, so the footer keeps its height. -->
                                     <StackPanel Orientation="Horizontal"
                                                 Visibility="{Binding IsBusy, Converter={StaticResource TrueVisibility}}">
-                                        <ProgressBar Width="240" Minimum="0" Maximum="1" Value="{Binding Progress, Mode=OneWay}" VerticalAlignment="Center"/>
+                                        <ProgressBar Width="240" Minimum="0" Maximum="1" Value="{Binding Progress, Mode=OneWay}" VerticalAlignment="Center"
+                                                     IsIndeterminate="{Binding IsProgressIndeterminate, Mode=OneWay}"/>
                                         <TextBlock Style="{StaticResource Secondary}" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
                                                    Text="{Binding ProgressText}"/>
                                     </StackPanel>
@@ -420,6 +427,18 @@
                                     <TextBlock Text="{Binding [settings.closeToTray], Source={x:Static loc:Loc.Instance}}" FontWeight="SemiBold" FontSize="14"/>
                                     <TextBlock Style="{StaticResource Secondary}" Margin="0,3,0,0"
                                                Text="{Binding [settings.closeToTray.desc], Source={x:Static loc:Loc.Instance}}"/>
+                                </StackPanel>
+                            </CheckBox>
+                        </Border>
+
+                        <TextBlock Text="{Binding [settings.section.explorer], Source={x:Static loc:Loc.Instance}}"
+                                   FontWeight="SemiBold" FontSize="14" Margin="2,22,0,8"/>
+                        <Border Style="{StaticResource Card}">
+                            <CheckBox IsChecked="{Binding AddToFolderMenu}" VerticalContentAlignment="Top">
+                                <StackPanel Margin="4,0,0,0">
+                                    <TextBlock Text="{Binding [settings.folderMenu], Source={x:Static loc:Loc.Instance}}" FontWeight="SemiBold" FontSize="14"/>
+                                    <TextBlock Style="{StaticResource Secondary}" Margin="0,3,0,0"
+                                               Text="{Binding [settings.folderMenu.desc], Source={x:Static loc:Loc.Instance}}"/>
                                 </StackPanel>
                             </CheckBox>
                         </Border>

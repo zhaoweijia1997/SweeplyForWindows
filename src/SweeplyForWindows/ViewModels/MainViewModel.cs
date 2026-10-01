@@ -53,6 +53,11 @@ public sealed class MainViewModel : ObservableObject
     private readonly CleanHistory _history;
     private CleanRecord? _lastRecord;
     private string? _historyNote;
+    private readonly List<GroupViewModel> _appGroups = new();
+    private readonly IReadOnlyList<string> _systemFolders = FolderJunk.SystemFolders();
+    private string? _folderPath;
+    private bool _progressIndeterminate;
+    private bool _sampleMode;
 
     /// <summary>Where past cleans are kept: a file of its own, written by the app only.</summary>
     public static string HistoryFile => System.IO.Path.Combine(
@@ -71,9 +76,15 @@ public sealed class MainViewModel : ObservableObject
             vm = new CategoryViewModel(category, OnSelectionChanged, path => _ = ExcludeItemAsync(vm!, path));
             group.Add(vm);
         }
+        _appGroups.AddRange(Groups);
         foreach (string path in _settings.ExcludedFolders) ExcludedPaths.Add(path);
 
-        ScanCommand = new RelayCommand(async _ => await ScanAsync(), () => !IsBusy && !IsReviewing);
+        ScanCommand = new RelayCommand(async _ =>
+        {
+            if (FolderPath is not null) await OpenFolderAsync(FolderPath);
+            else await ScanAsync();
+        }, () => !IsBusy && !IsReviewing);
+        LeaveFolderCommand = new RelayCommand(async _ => await LeaveFolderAsync(), () => !IsBusy && !IsReviewing);
         CleanCommand = new RelayCommand(_ => OpenReview(), () => CanClean);
         ConfirmCleanCommand = new RelayCommand(async _ => await ConfirmCleanAsync(), () => CanConfirmReview);
         CancelReviewCommand = new RelayCommand(_ => CloseReview());
@@ -103,6 +114,26 @@ public sealed class MainViewModel : ObservableObject
     public IEnumerable<CategoryViewModel> AllCategories => Groups.SelectMany(g => g.Categories);
 
     public ICommand ScanCommand { get; }
+
+    /// <summary>Back from one folder's leftovers to the usual cleanup.</summary>
+    public ICommand LeaveFolderCommand { get; }
+
+    /// <summary>The folder chosen from the folder right-click menu; null on the usual cleanup page.</summary>
+    public string? FolderPath
+    {
+        get => _folderPath;
+        private set
+        {
+            if (!SetField(ref _folderPath, value)) return;
+            OnPropertyChanged(nameof(IsFolderMode));
+            OnPropertyChanged(nameof(PageTitle));
+            OnPropertyChanged(nameof(PageSubtitle));
+        }
+    }
+
+    public bool IsFolderMode => FolderPath is not null;
+    public string PageTitle => Loc.Instance[IsFolderMode ? "clean.folder.title" : "clean.title"];
+    public string PageSubtitle => FolderPath ?? Loc.Instance["app.tagline"];
 
     /// <summary>Opens the list of everything that would be moved; nothing moves yet.</summary>
     public ICommand CleanCommand { get; }
@@ -197,16 +228,28 @@ public sealed class MainViewModel : ObservableObject
             Loc.Instance.SetLanguage(value.Code);
             _settings.Language = value.Code;
             _settings.Save();
+            FolderMenu.Refresh(Loc.Instance["menu.folder"]); // the menu text follows the app's language
         }
     }
 
     /// <summary>Settings page: start in the notification area when the user signs in.</summary>
     public bool StartWithWindows
     {
-        get => Autostart.IsEnabled;
+        get => !_sampleMode && Autostart.IsEnabled; // screenshots never show this PC's setting
         set
         {
             Autostart.Set(value);
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Settings page: "Clean up with SweeplyForWindows" on the folder right-click menu.</summary>
+    public bool AddToFolderMenu
+    {
+        get => !_sampleMode && FolderMenu.IsEnabled;
+        set
+        {
+            FolderMenu.Set(value, Loc.Instance["menu.folder"]);
             OnPropertyChanged();
         }
     }
@@ -307,6 +350,13 @@ public sealed class MainViewModel : ObservableObject
 
     public string ProgressText => Loc.Instance.Format(_progressKey, _progressDone, _progressTotal);
 
+    /// <summary>Looking through a folder: how long it takes is not known in advance.</summary>
+    public bool IsProgressIndeterminate
+    {
+        get => _progressIndeterminate;
+        private set => SetField(ref _progressIndeterminate, value);
+    }
+
     public TaskbarItemProgressState TaskbarState
     {
         get => _taskbarState;
@@ -346,6 +396,71 @@ public sealed class MainViewModel : ObservableObject
         HasScanned = true;
         TaskbarState = TaskbarItemProgressState.None;
         IsBusy = false;
+    }
+
+    /// <summary>
+    /// From the folder right-click menu: shows only the leftovers found in <paramref name="folder"/>,
+    /// in place of the usual categories. Only reads; cleaning goes through the same list as always.
+    /// </summary>
+    public async Task OpenFolderAsync(string folder)
+    {
+        while (IsBusy) await Task.Delay(200); // a scan or clean already running finishes first
+        CloseReview();
+        PageIndex = 0;
+        FolderPath = folder;
+        StatusMessage = null;
+        Groups.Clear();
+        OnSelectionChanged();
+
+        var check = FolderJunk.Check(folder, _systemFolders);
+        if (check != FolderCheck.Ok)
+        {
+            StatusMessage = Loc.Instance[$"clean.folder.{check}"];
+            HasScanned = true;
+            return;
+        }
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        TaskbarState = TaskbarItemProgressState.Indeterminate;
+        ReportProgress("clean.folder.looking", 0, 0);
+        var systemFolders = _systemFolders;
+        var (categories, truncated) = await Task.Run(() =>
+        {
+            var found = FolderJunk.Find(folder, systemFolders, out bool cut);
+            return (found, cut);
+        });
+        IsProgressIndeterminate = false;
+        TaskbarState = TaskbarItemProgressState.None;
+        IsBusy = false;
+
+        var group = new GroupViewModel(CategoryGroup.Folder);
+        foreach (var category in categories)
+        {
+            CategoryViewModel? vm = null;
+            vm = new CategoryViewModel(category, OnSelectionChanged, path => _ = ExcludeItemAsync(vm!, path));
+            group.Add(vm);
+        }
+        Groups.Add(group);
+        await ScanAsync(group.Categories.ToList(), keepMessage: true);
+
+        if (truncated)
+            StatusMessage = Loc.Instance.Format("clean.folder.truncated", FolderJunk.FolderLimit.ToString("N0", Loc.Instance.Culture));
+        else if (!group.Categories.Any(c => c.HasItems))
+            StatusMessage = Loc.Instance["clean.folder.nothing"];
+    }
+
+    /// <summary>Back to the usual categories, scanned again so they are up to date.</summary>
+    private async Task LeaveFolderAsync()
+    {
+        if (IsBusy || FolderPath is null) return;
+        CloseReview();
+        FolderPath = null;
+        StatusMessage = null;
+        Groups.Clear();
+        foreach (var g in _appGroups) Groups.Add(g);
+        OnSelectionChanged();
+        await ScanAsync();
     }
 
     /// <summary>Shows every selected item, grouped by category. Nothing is moved here.</summary>
@@ -554,7 +669,7 @@ public sealed class MainViewModel : ObservableObject
 
     private void Relocalize()
     {
-        foreach (var g in Groups)
+        foreach (var g in Groups.Concat(_appGroups).Distinct())
         {
             g.Relocalize();
             foreach (var c in g.Categories) c.Relocalize();
@@ -573,6 +688,7 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>Made-up results for screenshots: no real paths from this computer.</summary>
     public void LoadSample()
     {
+        _sampleMode = true;
         const string temp = @"C:\Users\Alex\AppData\Local\Temp";
         const string local = @"C:\Users\Alex\AppData\Local";
         const string roaming = @"C:\Users\Alex\AppData\Roaming";
@@ -639,5 +755,38 @@ public sealed class MainViewModel : ObservableObject
             RestoredCount = 1,
         });
         RefreshHistory();
+    }
+
+    /// <summary>Made-up results of "Clean up with SweeplyForWindows" on a folder, for screenshots.</summary>
+    public void LoadFolderSample()
+    {
+        _sampleMode = true;
+        const string root = @"C:\Users\Alex\source";
+        var old = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc);
+        CleanupItem Dir(string path, double mb) => new(path, true, (long)(mb * 1024 * 1024), old);
+        CleanupItem File(string path, double kb) => new(path, false, (long)(kb * 1024), old);
+        var samples = new Dictionary<string, CleanupItem[]>
+        {
+            ["folder-node-modules"] = new[] { Dir($@"{root}\web-shop\node_modules", 412), Dir($@"{root}\blog\node_modules", 236) },
+            ["folder-dotnet-build"] = new[] { Dir($@"{root}\InvoiceTool\src\InvoiceTool\bin", 96.4), Dir($@"{root}\InvoiceTool\src\InvoiceTool\obj", 21.7) },
+            ["folder-target"] = new[] { Dir($@"{root}\ray-tracer\target", 1840) },
+            ["folder-python-cache"] = new[] { Dir($@"{root}\scripts\__pycache__", 0.4), Dir($@"{root}\scripts\.pytest_cache", 0.1) },
+            ["folder-office-temp"] = new[] { File($@"{root}\notes\~$roadmap.docx", 0.2) },
+        };
+
+        FolderPath = root;
+        Groups.Clear();
+        var group = new GroupViewModel(CategoryGroup.Folder);
+        foreach (var category in FolderJunk.Find(System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N")), Array.Empty<string>(), out _))
+        {
+            var vm = new CategoryViewModel(category, OnSelectionChanged, _ => { });
+            vm.SetScan(samples.TryGetValue(category.Id, out var items)
+                ? new CategoryScan(category, items, ScanStatus.Found)
+                : new CategoryScan(category, Array.Empty<CleanupItem>(), ScanStatus.NotInstalled));
+            group.Add(vm);
+        }
+        Groups.Add(group);
+        group.Categories.First(c => c.Id == "folder-target").IsExpanded = true;
+        HasScanned = true;
     }
 }

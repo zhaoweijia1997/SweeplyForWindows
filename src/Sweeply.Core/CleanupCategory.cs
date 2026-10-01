@@ -8,6 +8,8 @@ public enum CategoryGroup
     Developer,
     Apps,
     Downloads,
+    /// <summary>Leftovers found in one folder chosen from the folder right-click menu.</summary>
+    Folder,
 }
 
 /// <summary>What a category looks for under each of its roots.</summary>

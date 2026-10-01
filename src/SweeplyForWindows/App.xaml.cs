@@ -88,9 +88,11 @@ public partial class App : Application
         _settings = Settings.Load();
         Loc.Instance.SetLanguage(_settings.Language ?? Loc.FromSystem());
         Autostart.Refresh();
+        FolderMenu.Refresh(Loc.Instance["menu.folder"]);
+        string? folder = FolderJunk.FolderFromArgs(e.Args);
 
         _viewModel = new MainViewModel(KnownPaths.FromSystem(), _settings);
-        _window = new MainWindow(_viewModel);
+        _window = new MainWindow(_viewModel, scanOnOpen: folder is null);
         _window.Closing += OnWindowClosing;
         _window.Closed += (_, _) => ExitApp();
 
@@ -111,12 +113,24 @@ public partial class App : Application
 
         instance.Listen(args => Dispatcher.BeginInvoke(() =>
         {
-            if (args.Contains("--exit")) ExitApp();
-            else ShowMainWindow();
+            if (args.Contains("--exit"))
+            {
+                ExitApp();
+                return;
+            }
+            ShowMainWindow();
+            if (FolderJunk.FolderFromArgs(args) is string chosen) _ = _viewModel!.OpenFolderAsync(chosen);
         }));
 
-        if (!e.Args.Contains(Autostart.BackgroundArg))
+        if (folder is not null)
+        {
             ShowMainWindow();
+            _ = _viewModel.OpenFolderAsync(folder);
+        }
+        else if (!e.Args.Contains(Autostart.BackgroundArg))
+        {
+            ShowMainWindow();
+        }
     }
 
     private void ShowMainWindow()
@@ -203,6 +217,27 @@ internal static class Snapshot
             WaitForAnimations(TimeSpan.FromMilliseconds(900));
             string themeName = theme == ThemeMode.Dark ? "dark" : "light";
             Save(window, theme == ThemeMode.Dark, Path.Combine(folder, $"{name}-{lang}-{themeName}.png"));
+            window.Close();
+        }
+
+        // "Clean up with SweeplyForWindows" on a folder.
+        foreach (var lang in new[] { "en", "zh-Hans" })
+        {
+            Loc.Instance.SetLanguage(lang);
+            var vm = new MainViewModel(KnownPaths.FromSystem(), new Settings(), new CleanHistory(null));
+            vm.LoadFolderSample();
+            var window = new MainWindow(vm, scanOnOpen: false)
+            {
+                ThemeMode = ThemeMode.Light,
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -32000,
+                Top = -32000,
+                ShowInTaskbar = false,
+                ShowActivated = false,
+            };
+            window.Show();
+            WaitForAnimations(TimeSpan.FromMilliseconds(900));
+            Save(window, false, Path.Combine(folder, $"folder-{lang}-light.png"));
             window.Close();
         }
 
