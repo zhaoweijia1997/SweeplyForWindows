@@ -57,5 +57,9 @@ public class LocalizationTests
             Assert.Contains($"reminder.{r}", en.Keys);
         foreach (var c in Enum.GetNames<FolderCheck>().Where(c => c != nameof(FolderCheck.Ok)))
             Assert.Contains($"clean.folder.{c}", en.Keys);
+        foreach (var k in Enum.GetNames<FileKind>())
+            Assert.Contains($"kind.{k}", en.Keys);
+        foreach (var c in Enum.GetNames<SpaceMoveCheck>().Where(c => c != nameof(SpaceMoveCheck.Ok)))
+            Assert.Contains($"space.why.{c}", en.Keys);
     }
 }

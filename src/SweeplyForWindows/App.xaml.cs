@@ -94,9 +94,10 @@ public partial class App : Application
         Autostart.Refresh();
         FolderMenu.Refresh(Loc.Instance["menu.folder"]);
         string? folder = FolderJunk.FolderFromArgs(e.Args);
+        string? spaceFolder = SpaceFolderFromArgs(e.Args);
 
         _viewModel = new MainViewModel(KnownPaths.FromSystem(), _settings);
-        _window = new MainWindow(_viewModel, scanOnOpen: folder is null);
+        _window = new MainWindow(_viewModel, scanOnOpen: folder is null && spaceFolder is null);
         _window.Closing += OnWindowClosing;
         _window.Closed += (_, _) => ExitApp();
 
@@ -155,6 +156,7 @@ public partial class App : Application
             }
             ShowMainWindow();
             if (FolderJunk.FolderFromArgs(args) is string chosen) _ = _viewModel!.OpenFolderAsync(chosen);
+            else if (SpaceFolderFromArgs(args) is string space) _viewModel!.OpenSpace(space);
         }));
 
         if (folder is not null)
@@ -162,10 +164,25 @@ public partial class App : Application
             ShowMainWindow();
             _ = _viewModel.OpenFolderAsync(folder);
         }
+        else if (spaceFolder is not null)
+        {
+            ShowMainWindow();
+            _viewModel.OpenSpace(spaceFolder);
+        }
         else if (!e.Args.Contains(Autostart.BackgroundArg))
         {
             ShowMainWindow();
         }
+    }
+
+    /// <summary>"--space &lt;folder&gt;": open the Space page on that folder. Same quoting rules as the folder menu.</summary>
+    private static string? SpaceFolderFromArgs(IReadOnlyList<string> args)
+    {
+        int i = args.ToList().IndexOf("--space");
+        if (i < 0 || i + 1 >= args.Count) return null;
+        string f = args[i + 1].Trim().TrimEnd('"');
+        if (f.Length == 2 && f[1] == ':') f += '\\';
+        return f.Length == 0 ? null : f;
     }
 
     private void ShowMainWindow()
@@ -228,11 +245,11 @@ internal static class Snapshot
         foreach (var lang in Loc.Languages) shots.Add((0, "clean", lang.Code, ThemeMode.Light));
         shots.Add((0, "clean", "en", ThemeMode.Dark));
         shots.Add((0, "clean", "zh-Hans", ThemeMode.Dark));
-        shots.Add((1, "settings", "en", ThemeMode.Light));
-        shots.Add((1, "settings", "zh-Hans", ThemeMode.Light));
-        shots.Add((2, "support", "en", ThemeMode.Light));
-        shots.Add((2, "support", "zh-Hans", ThemeMode.Light));
-        shots.Add((3, "about", "en", ThemeMode.Light));
+        shots.Add((MainViewModel.SettingsPage, "settings", "en", ThemeMode.Light));
+        shots.Add((MainViewModel.SettingsPage, "settings", "zh-Hans", ThemeMode.Light));
+        shots.Add((MainViewModel.SupportPage, "support", "en", ThemeMode.Light));
+        shots.Add((MainViewModel.SupportPage, "support", "zh-Hans", ThemeMode.Light));
+        shots.Add((MainViewModel.AboutPage, "about", "en", ThemeMode.Light));
 
         foreach (var (page, name, lang, theme) in shots)
         {
@@ -277,6 +294,34 @@ internal static class Snapshot
             window.Show();
             WaitForAnimations(TimeSpan.FromMilliseconds(900));
             Save(window, false, Path.Combine(folder, $"folder-{lang}-light.png"));
+            window.Close();
+        }
+
+        // The Space page: the folder list and the largest files, with made-up results.
+        foreach (var (lang, tab, name) in new[]
+                 {
+                     ("en", 0, "space"), ("zh-Hans", 0, "space"), ("en", 1, "space-largest"), ("zh-Hans", 1, "space-largest"),
+                     ("en", 2, "space-kinds"), ("zh-Hans", 2, "space-kinds"),
+                 })
+        {
+            Loc.Instance.SetLanguage(lang);
+            var vm = new MainViewModel(KnownPaths.FromSystem(), new Settings(), new CleanHistory(null));
+            vm.LoadSample();
+            vm.Space.LoadSample();
+            vm.Space.TabIndex = tab;
+            vm.PageIndex = MainViewModel.SpacePage;
+            var window = new MainWindow(vm, scanOnOpen: false)
+            {
+                ThemeMode = ThemeMode.Light,
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -32000,
+                Top = -32000,
+                ShowInTaskbar = false,
+                ShowActivated = false,
+            };
+            window.Show();
+            WaitForAnimations(TimeSpan.FromMilliseconds(900));
+            Save(window, false, Path.Combine(folder, $"{name}-{lang}-light.png"));
             window.Close();
         }
 

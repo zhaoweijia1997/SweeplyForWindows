@@ -24,7 +24,7 @@ shows you exactly what they are, and never deletes anything until you choose to.
 </p>
 
 > **Status: preview (0.3).** Cleaning, undo, the "Never clean" list, the folder right-click menu,
-> clean-up reminders, background mode and the activity monitor all work.
+> clean-up reminders, Clean up every day, Disk space, background mode and the activity monitor all work.
 
 ## What it finds
 
@@ -79,6 +79,26 @@ A build folder only counts next to the project file that creates it, so your own
 Folders starting with a dot (`.git`, `.vscode`…) are never looked into, and Windows, Program Files
 and app data can't be scanned at all. The same list, Recycle Bin and undo apply.
 On Windows 11 the entry is under **Show more options**.
+
+## See what takes up the space
+
+<p align="center">
+  <img src="docs/screenshots/space-en-light.png" width="760" alt="The Disk space page: folders on drive C, largest first, with their share and size">
+</p>
+
+**Disk space** in the sidebar scans a whole drive or one folder — it only reads — and shows:
+
+- folders largest first, with their share and size; click one to go in, or a folder in the path above to go back up;
+- the 100 largest files, wherever they are;
+- totals by type: videos, pictures, archives, disk images, programs and so on.
+
+Folders that can't be read (other users' folders, protected system folders) are marked, and for a
+whole drive it says how much of what Windows counts as used the scan could not see. Links are not followed.
+
+Tick files or folders to move them to the Recycle Bin: the same list, check right before moving
+and undo apply as for a clean. Windows, installed programs and app data can't be moved from here,
+nor any folder that holds them, nor hidden system files such as pagefile.sys. Desktop, Documents,
+Downloads and the other personal folders stay, though what is inside them can go.
 
 ## Safety first
 

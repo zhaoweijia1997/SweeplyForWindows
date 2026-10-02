@@ -49,6 +49,83 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- A long list with its own scroll bar that draws only the lines on screen. -->
+        <Style x:Key="VirtualList" TargetType="ItemsControl">
+            <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True"/>
+            <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ItemsControl">
+                        <ScrollViewer CanContentScroll="True" Focusable="False"
+                                      HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                            <ItemsPresenter/>
+                        </ScrollViewer>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="ItemsPanel">
+                <Setter.Value>
+                    <ItemsPanelTemplate>
+                        <VirtualizingStackPanel/>
+                    </ItemsPanelTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- One folder or file on the Space page: tick box, name (a folder opens), what is in it, share, size. -->
+        <DataTemplate x:Key="SpaceEntryRow">
+            <Grid Margin="0,2,16,2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="130"/>
+                    <ColumnDefinition Width="72"/>
+                    <ColumnDefinition Width="44"/>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <CheckBox IsChecked="{Binding IsSelected}" IsEnabled="{Binding CanSelect}" MinWidth="0" Margin="0,0,4,0" VerticalAlignment="Center"
+                          ToolTip="{Binding WhyNot}" ToolTipService.ShowOnDisabled="True"/>
+                <TextBlock Grid.Column="1" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="{Binding Glyph}" Margin="0,0,8,0"
+                           VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                    <Button Style="{StaticResource LinkButton}" Command="{Binding OpenCommand}" HorizontalAlignment="Left" ToolTip="{Binding Path}"
+                            Visibility="{Binding CanOpen, Converter={StaticResource TrueVisibility}}">
+                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                    </Button>
+                    <TextBlock Text="{Binding Name}" ToolTip="{Binding Path}" TextTrimming="CharacterEllipsis"
+                               Visibility="{Binding CanOpen, Converter={StaticResource FalseVisibility}}"/>
+                    <!-- Largest files come from all over: where each one is, small, under its name. -->
+                    <TextBlock Style="{StaticResource Secondary}" FontSize="12" Text="{Binding SubPath}" ToolTip="{Binding Path}"
+                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                               Visibility="{Binding SubPath, Converter={StaticResource TextVisibility}}"/>
+                </StackPanel>
+                <Grid Grid.Column="3" Margin="12,0,0,0" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Secondary}" FontSize="12" Text="{Binding Detail}" ToolTip="{Binding Detail}"
+                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Grid.Column="1" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE7BA;" FontSize="12" Margin="6,0,0,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"
+                               ToolTip="{Binding IncompleteText}" Visibility="{Binding IsIncomplete, Converter={StaticResource TrueVisibility}}"/>
+                </Grid>
+                <Border Grid.Column="4" Width="64" Height="6" CornerRadius="3" Margin="8,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center"
+                        Background="{DynamicResource CardStrokeColorDefaultBrush}">
+                    <Border Width="{Binding BarWidth}" HorizontalAlignment="Left" CornerRadius="3" Background="{DynamicResource AccentFillColorDefaultBrush}"/>
+                </Border>
+                <TextBlock Grid.Column="5" Style="{StaticResource Secondary}" FontSize="12" Text="{Binding ShareText}" TextAlignment="Right" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="6" Text="{Binding SizeText}" TextAlignment="Right" VerticalAlignment="Center"/>
+                <Button Grid.Column="7" Style="{StaticResource LinkButton}" Command="{Binding RevealCommand}" Margin="12,0,0,0" VerticalAlignment="Center"
+                        ToolTip="{Binding [clean.reveal], Source={x:Static loc:Loc.Instance}}"
+                        AutomationProperties.Name="{Binding [clean.reveal], Source={x:Static loc:Loc.Instance}}">
+                    <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE838;"/>
+                </Button>
+            </Grid>
+        </DataTemplate>
     </Window.Resources>
 
     <Grid>
@@ -79,6 +156,12 @@
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Style="{StaticResource NavGlyph}" Text="&#xE74D;"/>
                         <TextBlock Text="{Binding [nav.clean], Source={x:Static loc:Loc.Instance}}" Margin="14,0,0,0"/>
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem Padding="10,9">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource NavGlyph}" Text="&#xEDA2;"/>
+                        <TextBlock Text="{Binding [nav.space], Source={x:Static loc:Loc.Instance}}" Margin="14,0,0,0"/>
                     </StackPanel>
                 </ListBoxItem>
                 <ListBoxItem Padding="10,9">
@@ -339,9 +422,171 @@
                     </Border>
                 </Grid>
 
+                <!-- ===== Space: what takes up the space on a drive or in a folder ===== -->
+                <Grid Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=1}">
+                    <Grid DataContext="{Binding Space}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Margin="32,26,32,10">
+                            <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [space.title], Source={x:Static loc:Loc.Instance}}"/>
+                            <TextBlock Style="{StaticResource Secondary}" Margin="0,6,0,0" Text="{Binding [space.subtitle], Source={x:Static loc:Loc.Instance}}"/>
+                            <Grid Margin="0,14,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <ComboBox ItemsSource="{Binding Drives}" SelectedItem="{Binding SelectedDrive}" DisplayMemberPath="Text" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Padding="14,6" Margin="8,0,0,0" Command="{Binding ChooseFolderCommand}"
+                                        Content="{Binding [space.chooseFolder], Source={x:Static loc:Loc.Instance}}"/>
+                                <Button Grid.Column="2" Style="{DynamicResource AccentButtonStyle}" Padding="16,6" MinWidth="110" Margin="8,0,0,0"
+                                        Command="{Binding ScanCommand}" Content="{Binding ScanButtonText}"/>
+                            </Grid>
+                            <!-- A folder chosen instead of a whole drive. -->
+                            <TextBlock Style="{StaticResource Secondary}" Margin="2,6,0,0" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                       Text="{Binding ScanTargetText}" ToolTip="{Binding ScanTargetText}"
+                                       Visibility="{Binding ScanTargetText, Converter={StaticResource TextVisibility}}"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Margin="32,0,32,8">
+                            <Border Style="{StaticResource Card}" Margin="0,0,0,8"
+                                    Background="{DynamicResource SystemFillColorAttentionBackgroundBrush}"
+                                    Visibility="{Binding StatusMessage, Converter={StaticResource TextVisibility}}">
+                                <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap"/>
+                            </Border>
+                            <TextBlock Style="{StaticResource Secondary}" Text="{Binding [space.intro], Source={x:Static loc:Loc.Instance}}"
+                                       Visibility="{Binding ShowIntro, Converter={StaticResource TrueVisibility}}"/>
+                            <StackPanel Visibility="{Binding IsScanning, Converter={StaticResource TrueVisibility}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <ProgressBar Width="240" IsIndeterminate="True" VerticalAlignment="Center"/>
+                                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="{Binding ProgressText}"/>
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource Secondary}" FontSize="12" Margin="0,4,0,0" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                           Text="{Binding ProgressPath}"/>
+                            </StackPanel>
+                            <StackPanel Visibility="{Binding HasResult, Converter={StaticResource TrueVisibility}}">
+                                <TextBlock FontWeight="SemiBold" Text="{Binding SummaryText}" TextWrapping="Wrap"/>
+                                <TextBlock Style="{StaticResource Secondary}" FontSize="12" Margin="0,2,0,0" Text="{Binding UnreadableText}"
+                                           Visibility="{Binding UnreadableText, Converter={StaticResource TextVisibility}}"/>
+                                <TextBlock Style="{StaticResource Secondary}" FontSize="12" Margin="0,2,0,0" Text="{Binding UnaccountedText}"
+                                           Visibility="{Binding UnaccountedText, Converter={StaticResource TextVisibility}}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <TabControl Grid.Row="2" Margin="32,0,32,8" SelectedIndex="{Binding TabIndex}"
+                                    Visibility="{Binding HasResult, Converter={StaticResource TrueVisibility}}">
+                            <TabItem Header="{Binding [space.tab.folders], Source={x:Static loc:Loc.Instance}}">
+                                <DockPanel Margin="0,10,0,0">
+                                    <!-- Where we are: click a folder of the path to go back up to it. -->
+                                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+                                        <Button DockPanel.Dock="Left" Style="{StaticResource LinkButton}" Command="{Binding UpCommand}" Margin="0,0,10,0"
+                                                VerticalAlignment="Center" ToolTip="{Binding [space.up], Source={x:Static loc:Loc.Instance}}"
+                                                AutomationProperties.Name="{Binding [space.up], Source={x:Static loc:Loc.Instance}}">
+                                            <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE74A;"/>
+                                        </Button>
+                                        <ItemsControl ItemsSource="{Binding Crumbs}" VerticalAlignment="Center">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Button Style="{StaticResource LinkButton}" Command="{Binding OpenCommand}">
+                                                            <TextBlock Text="{Binding Name}"/>
+                                                        </Button>
+                                                        <TextBlock Text="  ›  " Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                   Visibility="{Binding IsLast, Converter={StaticResource FalseVisibility}}"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </DockPanel>
+                                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource Secondary}" FontSize="12" Margin="0,0,0,8" Text="{Binding CurrentText}"/>
+                                    <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Secondary}" FontSize="12" Margin="8,6,0,0" Text="{Binding MoreText}"
+                                               Visibility="{Binding MoreText, Converter={StaticResource TextVisibility}}"/>
+                                    <ItemsControl Style="{StaticResource VirtualList}" ItemsSource="{Binding Entries}" ItemTemplate="{StaticResource SpaceEntryRow}"/>
+                                </DockPanel>
+                            </TabItem>
+                            <TabItem Header="{Binding [space.tab.largest], Source={x:Static loc:Loc.Instance}}">
+                                <ItemsControl Margin="0,10,0,0" Style="{StaticResource VirtualList}" ItemsSource="{Binding LargestFiles}"
+                                              ItemTemplate="{StaticResource SpaceEntryRow}"/>
+                            </TabItem>
+                            <TabItem Header="{Binding [space.tab.kinds], Source={x:Static loc:Loc.Instance}}">
+                                <DockPanel Margin="0,10,0,0">
+                                    <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Secondary}" FontSize="12" Margin="0,8,0,0"
+                                               Text="{Binding [space.kinds.note], Source={x:Static loc:Loc.Instance}}"/>
+                                    <ItemsControl ItemsSource="{Binding Kinds}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,4,16,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="176"/>
+                                                        <ColumnDefinition Width="44"/>
+                                                        <ColumnDefinition Width="90"/>
+                                                        <ColumnDefinition Width="150"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                                    <Border Grid.Column="1" Width="160" Height="8" CornerRadius="4" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                            Background="{DynamicResource CardStrokeColorDefaultBrush}">
+                                                        <Border Width="{Binding BarWidth}" HorizontalAlignment="Left" CornerRadius="4"
+                                                                Background="{DynamicResource AccentFillColorDefaultBrush}"/>
+                                                    </Border>
+                                                    <TextBlock Grid.Column="2" Style="{StaticResource Secondary}" FontSize="12" Text="{Binding ShareText}"
+                                                               TextAlignment="Right" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="3" Text="{Binding SizeText}" TextAlignment="Right" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="4" Style="{StaticResource Secondary}" FontSize="12" Text="{Binding CountText}"
+                                                               Margin="16,0,0,0" VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </DockPanel>
+                            </TabItem>
+                        </TabControl>
+
+                        <Border Grid.Row="3" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"
+                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" Padding="32,14"
+                                Visibility="{Binding HasResult, Converter={StaticResource TrueVisibility}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding SelectedText}" FontWeight="SemiBold" FontSize="15"/>
+                                    <Grid Margin="0,3,0,0">
+                                        <TextBlock Style="{StaticResource Secondary}" FontSize="12"
+                                                   Text="{Binding [space.note], Source={x:Static loc:Loc.Instance}}"
+                                                   Visibility="{Binding DataContext.IsBusy, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource FalseVisibility}}"/>
+                                        <!-- While moving: the same line shows progress, so the footer keeps its height. -->
+                                        <StackPanel Orientation="Horizontal"
+                                                    Visibility="{Binding DataContext.IsBusy, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource TrueVisibility}}">
+                                            <ProgressBar Width="240" Minimum="0" Maximum="1" VerticalAlignment="Center"
+                                                         Value="{Binding DataContext.Progress, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}"/>
+                                            <TextBlock Style="{StaticResource Secondary}" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
+                                                       Text="{Binding DataContext.ProgressText, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                                <Button Grid.Column="1" Style="{DynamicResource AccentButtonStyle}" Padding="18,7" MinWidth="150"
+                                        Content="{Binding [clean.moveToBin], Source={x:Static loc:Loc.Instance}}"
+                                        Command="{Binding MoveCommand}"/>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Grid>
+
                 <!-- ===== Settings ===== -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,26,32,24"
-                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=1}">
+                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=2}">
                     <StackPanel MaxWidth="820" HorizontalAlignment="Left">
                         <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [settings.title], Source={x:Static loc:Loc.Instance}}"/>
 
@@ -510,7 +755,7 @@
 
                 <!-- ===== Support ===== -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,26,32,24"
-                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=2}">
+                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=3}">
                     <StackPanel MaxWidth="820" HorizontalAlignment="Left">
                         <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [support.title], Source={x:Static loc:Loc.Instance}}"/>
                         <TextBlock Margin="0,14,0,0" TextWrapping="Wrap" FontSize="14"
@@ -551,7 +796,7 @@
 
                 <!-- ===== About ===== -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,26,32,24"
-                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=3}">
+                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=4}">
                     <StackPanel MaxWidth="720" HorizontalAlignment="Left">
                         <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [about.title], Source={x:Static loc:Loc.Instance}}"/>
                         <Border Style="{StaticResource Card}" Margin="0,18,0,0" Padding="20">

@@ -6,4 +6,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- The app builds made-up space results for screenshots. -->
+    <InternalsVisibleTo Include="SweeplyForWindows" />
+  </ItemGroup>
+
 </Project>

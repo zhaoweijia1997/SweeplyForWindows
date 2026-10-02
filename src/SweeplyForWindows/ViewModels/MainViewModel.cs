@@ -59,6 +59,7 @@ public sealed class MainViewModel : ObservableObject
     private string? _folderPath;
     private bool _progressIndeterminate;
     private bool _sampleMode;
+    private bool _reviewFromSpace; // the list showing was opened from the Space page
 
     /// <summary>Where past cleans are kept: a file of its own, written by the app only.</summary>
     public static string HistoryFile => System.IO.Path.Combine(
@@ -80,6 +81,10 @@ public sealed class MainViewModel : ObservableObject
         }
         _appGroups.AddRange(Groups);
         foreach (string path in _settings.ExcludedFolders) ExcludedPaths.Add(path);
+        Space = new SpaceViewModel(paths, () => _settings.ExcludedFolders.ToArray(), OpenSpaceReview, () => !IsBusy && !IsReviewing)
+        {
+            PickFolder = () => PickFolder?.Invoke(),
+        };
 
         ScanCommand = new RelayCommand(async _ =>
         {
@@ -89,7 +94,12 @@ public sealed class MainViewModel : ObservableObject
         LeaveFolderCommand = new RelayCommand(async _ => await LeaveFolderAsync(), () => !IsBusy && !IsReviewing);
         CleanCommand = new RelayCommand(_ => OpenReview(), () => CanClean);
         ConfirmCleanCommand = new RelayCommand(async _ => await ConfirmCleanAsync(), () => CanConfirmReview);
-        CancelReviewCommand = new RelayCommand(_ => CloseReview());
+        CancelReviewCommand = new RelayCommand(_ =>
+        {
+            bool fromSpace = _reviewFromSpace;
+            CloseReview();
+            if (fromSpace) PageIndex = SpacePage; // back to where the items were ticked
+        });
         ExportReviewCommand = new RelayCommand(_ => ExportReview(), () => IsReviewing);
         UndoLastCommand = new RelayCommand(async _ => { if (_lastRecord is not null) await UndoAsync(_lastRecord); }, () => CanUndoLast);
         RefreshHistory();
@@ -214,7 +224,10 @@ public sealed class MainViewModel : ObservableObject
     public Func<IntPtr>? OwnerHandle { get; set; }
 
     /// <summary>Page numbers, in the order of the navigation list.</summary>
-    public const int CleanPage = 0, SettingsPage = 1;
+    public const int CleanPage = 0, SpacePage = 1, SettingsPage = 2, SupportPage = 3, AboutPage = 4;
+
+    /// <summary>The Space page: what takes up the space on a drive or in a folder.</summary>
+    public SpaceViewModel Space { get; }
 
     public int PageIndex
     {
@@ -309,6 +322,13 @@ public sealed class MainViewModel : ObservableObject
             OnPropertyChanged();
             AutoCleanSettingsChanged?.Invoke();
         }
+    }
+
+    /// <summary>"--space &lt;folder&gt;": the Space page, scanning that folder.</summary>
+    public void OpenSpace(string folder)
+    {
+        PageIndex = SpacePage;
+        Space.ScanFolder(folder);
     }
 
     /// <summary>After a reminder was clicked: show up-to-date results (the window may have been open for days).</summary>
@@ -539,6 +559,35 @@ public sealed class MainViewModel : ObservableObject
         _confirmReady = false;
         _confirmDelay.Stop();
         _confirmDelay.Start();
+        _reviewFromSpace = false;
+        IsReviewing = true;
+        OnPropertyChanged(nameof(ReviewSummary));
+    }
+
+    /// <summary>
+    /// The same list for what was ticked on the Space page, shown in place of the Clean up page; Back and
+    /// confirming both return to the Space page.
+    /// </summary>
+    private void OpenSpaceReview(List<(CleanupItem Item, CleanupCategory Category)> selection)
+    {
+        if (IsBusy || IsReviewing || selection.Count == 0) return;
+        ReviewRows.Clear();
+        _reviewItems.Clear();
+        var culture = Loc.Instance.Culture;
+        ReviewRows.Add(new ReviewRow(Loc.Instance.Format("review.category", Loc.Instance["space.title"], selection.Count,
+            SizeFormatter.Format(selection.Sum(s => s.Item.Bytes), culture))));
+        foreach (var (item, category) in selection)
+        {
+            var row = new ReviewRow(new ItemViewModel(item, culture, OnSelectionChanged), category);
+            ReviewRows.Add(row);
+            _reviewItems.Add(row);
+        }
+        ReviewNote = null;
+        _confirmReady = false;
+        _confirmDelay.Stop();
+        _confirmDelay.Start();
+        _reviewFromSpace = true;
+        PageIndex = CleanPage;
         IsReviewing = true;
         OnPropertyChanged(nameof(ReviewSummary));
     }
@@ -557,8 +606,16 @@ public sealed class MainViewModel : ObservableObject
         if (!CanConfirmReview) return;
         // Exactly what the list showed, minus anything unticked there.
         var selection = ReviewSelected.Select(r => (r.Item!.Item, r.Category!)).ToList();
+        bool fromSpace = _reviewFromSpace;
         CloseReview();
-        await CleanAsync(selection);
+        if (!fromSpace)
+        {
+            await CleanAsync(selection);
+            return;
+        }
+        PageIndex = SpacePage;
+        var outcome = await MoveAsync(selection);
+        if (outcome is not null) Space.AfterMoved(outcome);
     }
 
     private void ExportReview()
@@ -588,11 +645,26 @@ public sealed class MainViewModel : ObservableObject
 
     private async Task CleanAsync(List<(CleanupItem Item, CleanupCategory Category)> selection)
     {
-        if (selection.Count == 0) return;
+        StatusMessage = null;
+        var outcome = await MoveAsync(selection);
+        if (outcome is null) return;
+        string moved = SizeFormatter.Format(outcome.MovedBytes, Loc.Instance.Culture);
+        StatusMessage = outcome.Skipped.Count == 0
+            ? Loc.Instance.Format("clean.done", outcome.MovedCount, moved)
+            : Loc.Instance.Format("clean.doneSkipped", outcome.MovedCount, moved, outcome.Skipped.Count);
+        await ScanAsync(keepMessage: true);
+    }
+
+    /// <summary>
+    /// Moves the items (each checked again right before) and remembers exactly what went, so the clean can
+    /// be undone. Null when there was nothing to move.
+    /// </summary>
+    private async Task<CleanOutcome?> MoveAsync(List<(CleanupItem Item, CleanupCategory Category)> selection)
+    {
+        if (selection.Count == 0) return null;
         IsBusy = true;
         _lastRecord = null;
         var startedUtc = DateTime.UtcNow;
-        StatusMessage = null;
         TaskbarState = TaskbarItemProgressState.Normal;
         ReportProgress("clean.progress", 0, selection.Count);
         IntPtr owner = OwnerHandle?.Invoke() ?? IntPtr.Zero;
@@ -617,15 +689,10 @@ public sealed class MainViewModel : ObservableObject
             _settings.Save();
         }
 
-        string moved = SizeFormatter.Format(outcome.MovedBytes, Loc.Instance.Culture);
-        StatusMessage = outcome.Skipped.Count == 0
-            ? Loc.Instance.Format("clean.done", outcome.MovedCount, moved)
-            : Loc.Instance.Format("clean.doneSkipped", outcome.MovedCount, moved, outcome.Skipped.Count);
         TaskbarState = TaskbarItemProgressState.None;
         IsBusy = false;
         OnPropertyChanged(nameof(CanUndoLast));
-
-        await ScanAsync(keepMessage: true);
+        return outcome;
     }
 
     /// <summary>
@@ -786,6 +853,7 @@ public sealed class MainViewModel : ObservableObject
         foreach (var option in TrayDisplayOptions) option.Relocalize();
         foreach (var option in ReminderOptions) option.Relocalize();
         RefreshHistory();
+        Space.Relocalize();
         OnAllPropertiesChanged();
     }
 

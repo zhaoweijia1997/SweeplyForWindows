@@ -131,6 +131,10 @@ internal static class FileTree
     public static bool IsReparsePoint(FileSystemInfo info) =>
         (info.Attributes & FileAttributes.ReparsePoint) != 0;
 
+    /// <summary>Hidden and system both: pagefile.sys, System Volume Information, $Recycle.Bin, Recovery…</summary>
+    public static bool IsHiddenSystem(FileSystemInfo info) =>
+        (info.Attributes & (FileAttributes.Hidden | FileAttributes.System)) == (FileAttributes.Hidden | FileAttributes.System);
+
     /// <summary>
     /// When the item last arrived or changed: the later of its modified and created times. A file
     /// copied or unpacked a minute ago can carry a modified time from years back; its created time

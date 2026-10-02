@@ -15,6 +15,8 @@ public enum SafetyVerdict
     TooRecent,
     /// <summary>On the "Never clean" list, inside something on it, or contains something on it.</summary>
     Excluded,
+    /// <summary>Windows, a program or app data, a personal folder itself, or a hidden system item.</summary>
+    Protected,
 }
 
 /// <summary>
@@ -54,9 +56,15 @@ public static class SafetyCheck
         // The list may have changed since the scan; it always wins.
         if (Exclusions.IsExcluded(full, excluded)) return SafetyVerdict.Excluded;
 
+        // Same "is, is inside or contains" rule as the list, for places nothing may come from.
+        if (Exclusions.IsExcluded(full, category.ProtectedPlaces)) return SafetyVerdict.Protected;
+        if (category.KeptFolders.Any(k => string.Equals(full, Normalize(k), StringComparison.OrdinalIgnoreCase)))
+            return SafetyVerdict.Protected;
+
         FileSystemInfo info = Directory.Exists(full) ? new DirectoryInfo(full) : new FileInfo(full);
         if (!info.Exists) return SafetyVerdict.Missing;
         if (!Scanner.Matches(category, info)) return SafetyVerdict.OutsideCategory;
+        if (category.RefuseSystemItems && FileTree.IsHiddenSystem(info)) return SafetyVerdict.Protected;
 
         if (FileTree.IsReparsePoint(info) || FileTree.IsReparsePoint(new DirectoryInfo(root)))
             return SafetyVerdict.ReparsePoint;

@@ -10,6 +10,8 @@ public enum CategoryGroup
     Downloads,
     /// <summary>Leftovers found in one folder chosen from the folder right-click menu.</summary>
     Folder,
+    /// <summary>Files and folders picked on the Space page.</summary>
+    Space,
 }
 
 /// <summary>What a category looks for under each of its roots.</summary>
@@ -56,4 +58,16 @@ public sealed class CleanupCategory
     public IReadOnlyList<string> BlockingProcesses { get; init; } = Array.Empty<string>();
 
     public bool SelectedByDefault { get; init; } = true;
+
+    /// <summary>
+    /// Nothing is moved that is, is inside, or contains one of these: Windows, installed programs and
+    /// app data, for items picked by hand on the Space page. The usual categories need none.
+    /// </summary>
+    public IReadOnlyList<string> ProtectedPlaces { get; init; } = Array.Empty<string>();
+
+    /// <summary>Folders whose contents may be moved but never the folder itself (Desktop, Documents…).</summary>
+    public IReadOnlyList<string> KeptFolders { get; init; } = Array.Empty<string>();
+
+    /// <summary>Refuses hidden system items such as pagefile.sys, System Volume Information or $Recycle.Bin.</summary>
+    public bool RefuseSystemItems { get; init; }
 }
