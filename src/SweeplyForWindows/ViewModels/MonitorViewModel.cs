@@ -95,8 +95,11 @@ public sealed class MonitorViewModel : ObservableObject
     /// <summary>The Network tab.</summary>
     public NetworkViewModel NetworkInfo { get; } = new();
 
+    /// <summary>The Tools tab: ping and trace route.</summary>
+    public ToolsViewModel Tools { get; } = new();
+
     /// <summary>Tab numbers, in the order of the tabs.</summary>
-    public const int PerformanceTab = 0, HardwareTab = 1, NetworkTab = 2;
+    public const int PerformanceTab = 0, HardwareTab = 1, NetworkTab = 2, ToolsTab = 3;
 
     public int TabIndex
     {
@@ -112,6 +115,7 @@ public sealed class MonitorViewModel : ObservableObject
     {
         Hardware.SetShown(_shown && TabIndex == HardwareTab);
         NetworkInfo.SetShown(_shown && TabIndex == NetworkTab);
+        Tools.SetShown(_shown && TabIndex == ToolsTab);
     }
 
     private DateTime Now => _sampleNow ?? DateTime.UtcNow;
@@ -149,6 +153,7 @@ public sealed class MonitorViewModel : ObservableObject
     {
         _shown = shown;
         if (shown) Refresh(Now);
+        else Tools.StopAll(); // nothing keeps sending once the page is out of view
         TellTabs();
     }
 
@@ -157,6 +162,7 @@ public sealed class MonitorViewModel : ObservableObject
         foreach (var card in Cards) card.Relocalize();
         Hardware.Relocalize();
         NetworkInfo.Relocalize();
+        Tools.Relocalize();
         Refresh(Now);
     }
 
@@ -301,6 +307,7 @@ public sealed class MonitorViewModel : ObservableObject
         _temperature.Add(now, 51.0);
         Hardware.LoadSample(now);
         NetworkInfo.LoadSample();
+        Tools.LoadSample(now);
         Refresh(now);
     }
 }

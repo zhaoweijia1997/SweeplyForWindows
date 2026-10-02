@@ -51,6 +51,20 @@ public class NetworkTests
     }
 
     [Fact]
+    public void Local_network_is_the_subnet_of_an_adapter_that_is_up()
+    {
+        var adapters = new[]
+        {
+            new NetworkAdapter { Id = "a", Name = "Wi-Fi", IsUp = true, IPv4 = new[] { (System.Net.IPAddress.Parse("192.0.2.23"), 24) } },
+            new NetworkAdapter { Id = "b", Name = "Ethernet", IsUp = false, IPv4 = new[] { (System.Net.IPAddress.Parse("198.51.100.5"), 24) } },
+        };
+        Assert.True(NetworkAdapters.IsOnLocalNetwork(System.Net.IPAddress.Parse("192.0.2.1"), adapters));
+        Assert.False(NetworkAdapters.IsOnLocalNetwork(System.Net.IPAddress.Parse("192.0.3.1"), adapters));
+        Assert.False(NetworkAdapters.IsOnLocalNetwork(System.Net.IPAddress.Parse("198.51.100.9"), adapters)); // that adapter is down
+        Assert.False(NetworkAdapters.IsOnLocalNetwork(System.Net.IPAddress.Parse("2001:db8::1"), adapters));
+    }
+
+    [Fact]
     public void Adapters_read_on_this_machine()
     {
         var adapters = NetworkAdapters.Read();

@@ -128,6 +128,26 @@ public static class NetworkAdapters
         return 0;
     }
 
+    /// <summary>Whether an IPv4 address is on the network of one of the adapters that are up (same subnet).</summary>
+    public static bool IsOnLocalNetwork(IPAddress address, IEnumerable<NetworkAdapter> adapters)
+    {
+        if (address.AddressFamily != AddressFamily.InterNetwork) return false;
+        uint target = ToUInt(address);
+        foreach (var adapter in adapters.Where(a => a.IsUp))
+            foreach (var (own, prefix) in adapter.IPv4)
+            {
+                uint mask = prefix <= 0 ? 0 : prefix >= 32 ? uint.MaxValue : uint.MaxValue << (32 - prefix);
+                if ((ToUInt(own) & mask) == (target & mask)) return true;
+            }
+        return false;
+    }
+
+    private static uint ToUInt(IPAddress v4)
+    {
+        var b = v4.GetAddressBytes();
+        return (uint)b[0] << 24 | (uint)b[1] << 16 | (uint)b[2] << 8 | b[3];
+    }
+
     /// <summary>"24-B2-B9-2C-55-05", as Windows writes it; empty when there is none.</summary>
     public static string FormatMac(byte[] bytes) => bytes.Length == 0 ? "" : BitConverter.ToString(bytes);
 
