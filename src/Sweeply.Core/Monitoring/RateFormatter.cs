@@ -44,5 +44,18 @@ public static class RateFormatter
     public static string Percent(double percent, CultureInfo? culture = null) =>
         Math.Clamp(Math.Round(Clean(percent)), 0, 100).ToString("0", culture ?? CultureInfo.CurrentCulture);
 
+    /// <summary>A temperature in whole degrees: "38°C".</summary>
+    public static string Celsius(double celsius, CultureInfo? culture = null) => Degrees(celsius, culture) + "°C";
+
+    /// <summary>A temperature for a notification-area icon: "38°".</summary>
+    public static string CompactCelsius(double celsius, CultureInfo? culture = null) => Degrees(celsius, culture) + "°";
+
+    private static string Degrees(double celsius, CultureInfo? culture)
+    {
+        double rounded = double.IsFinite(celsius) ? Math.Round(celsius) : 0;
+        if (rounded == 0) rounded = 0; // no "-0"
+        return rounded.ToString("0", culture ?? CultureInfo.CurrentCulture);
+    }
+
     private static double Clean(double value) => double.IsFinite(value) && value > 0 ? value : 0;
 }

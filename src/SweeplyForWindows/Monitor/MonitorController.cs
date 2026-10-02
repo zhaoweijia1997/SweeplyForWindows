@@ -8,17 +8,22 @@ using SweeplyForWindows.Platform;
 namespace SweeplyForWindows.Monitor;
 
 /// <summary>
-/// Samples system activity once a second while anything shows it (icon number, icon details or the
-/// floating bar), and stops sampling when nothing does.
+/// Samples system activity once a second, and temperatures every 10 seconds, while anything shows
+/// them (icon number, icon details or the floating bar), and stops sampling when nothing does.
 /// </summary>
 internal sealed class MonitorController : IDisposable
 {
+    // Temperatures change slowly; there is no need to ask the drives every second.
+    private static readonly TimeSpan ThermalEvery = TimeSpan.FromSeconds(10);
+
     private readonly Settings _settings;
     private readonly TrayIcon _tray;
     private readonly Dispatcher _dispatcher;
     private readonly MonitorBarViewModel _barModel = new();
     private MonitorBar? _bar;
+    private bool _barAtCorner; // placed in the corner by the app, not dragged: keep its right edge there
     private CancellationTokenSource? _sampling;
+    private IReadOnlyList<ThermalReading> _thermals = Array.Empty<ThermalReading>(); // the latest, used every second
     private string? _iconKey; // what the icon currently shows, to redraw only on change
 
     public MonitorController(Settings settings, TrayIcon tray, Dispatcher dispatcher)
@@ -77,6 +82,27 @@ internal sealed class MonitorController : IDisposable
             }
             catch (OperationCanceledException) { }
         });
+
+        // A separate loop, so a drive that is slow to answer never holds up the numbers above.
+        Task.Run(async () =>
+        {
+            using var thermals = new ThermalSampler();
+            using var timer = new PeriodicTimer(ThermalEvery);
+            try
+            {
+                do
+                {
+                    IReadOnlyList<ThermalReading> readings;
+                    try { readings = thermals.Read(); }
+                    catch (Exception) { readings = Array.Empty<ThermalReading>(); } // temperatures are extra; never stop for them
+                    _ = _dispatcher.BeginInvoke(() =>
+                    {
+                        if (!token.IsCancellationRequested) _thermals = readings;
+                    });
+                } while (await timer.WaitForNextTickAsync(token));
+            }
+            catch (OperationCanceledException) { }
+        });
     }
 
     private void StopSampling()
@@ -84,6 +110,7 @@ internal sealed class MonitorController : IDisposable
         _sampling?.Cancel();
         _sampling?.Dispose();
         _sampling = null;
+        _thermals = Array.Empty<ThermalReading>();
     }
 
     private void Show(SystemSample sample, bool hasCpu, bool hasDisk)
@@ -93,6 +120,7 @@ internal sealed class MonitorController : IDisposable
         string upload = RateFormatter.Format(sample.UploadBytesPerSecond, culture);
         string cpu = hasCpu ? RateFormatter.Percent(sample.CpuPercent, culture) : "—";
         string disk = hasDisk ? RateFormatter.Format(sample.DiskWriteBytesPerSecond, culture) : "—";
+        var hottest = ThermalSampler.Hottest(_thermals);
 
         if (_settings.TrayDisplay != TrayDisplay.AppIcon)
         {
@@ -102,6 +130,7 @@ internal sealed class MonitorController : IDisposable
                 TrayDisplay.Download => RateFormatter.Compact(sample.DownloadBytesPerSecond, culture),
                 TrayDisplay.Upload => RateFormatter.Compact(sample.UploadBytesPerSecond, culture),
                 TrayDisplay.DiskWrite => hasDisk ? RateFormatter.Compact(sample.DiskWriteBytesPerSecond, culture) : "—",
+                TrayDisplay.Temperature => hottest is { } h ? RateFormatter.CompactCelsius(h.Celsius, culture) : "—",
                 _ => "",
             };
             int size = _tray.IconSize;
@@ -119,6 +148,14 @@ internal sealed class MonitorController : IDisposable
             var tip = new StringBuilder("SweeplyForWindows");
             tip.Append('\n').Append(loc.Format("monitor.download", download)).Append("  ").Append(loc.Format("monitor.upload", upload));
             tip.Append('\n').Append(loc.Format("monitor.cpu", cpu)).Append("  ").Append(loc.Format("monitor.diskWrite", disk));
+            // The hottest drive and the hottest graphics card; parts that can't be read are left out.
+            var parts = new[] { ThermalPart.Disk, ThermalPart.Graphics }
+                .Select(part => ThermalSampler.Hottest(_thermals, part) is { } h
+                    ? loc.Format($"monitor.temp.{part}", RateFormatter.Celsius(h.Celsius, culture))
+                    : null)
+                .OfType<string>()
+                .ToList();
+            if (parts.Count > 0) tip.Append('\n').Append(loc.Format("monitor.temperature", string.Join("  ", parts)));
             _tray.SetToolTip(tip.ToString());
         }
 
@@ -128,6 +165,8 @@ internal sealed class MonitorController : IDisposable
             _barModel.Upload = upload;
             _barModel.Cpu = hasCpu ? cpu + "%" : "—";
             _barModel.DiskWrite = disk;
+            _barModel.Temperature = hottest is { } h ? RateFormatter.Celsius(h.Celsius, culture) : "";
+            _barModel.TemperatureDetails = string.Join("\n", _thermals.Select(t => $"{t.Name}  {RateFormatter.Celsius(t.Celsius, culture)}"));
         }
     }
 
@@ -146,9 +185,22 @@ internal sealed class MonitorController : IDisposable
         _bar.HideRequested += () => HideBarRequested?.Invoke();
         _bar.Moved += (left, top) =>
         {
+            _barAtCorner = false;
             _settings.MonitorBarLeft = left;
             _settings.MonitorBarTop = top;
             _settings.Save();
+        };
+        // The bar gets wider when the temperature appears a moment after it opens.
+        _bar.SizeChanged += (_, e) =>
+        {
+            if (!e.WidthChanged || _bar is null) return;
+            if (_barAtCorner) PlaceInCorner(_bar);
+            else
+            {
+                // Dragged there earlier (perhaps while it was narrower): keep it on the screen.
+                double right = SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth;
+                if (_bar.Left + _bar.ActualWidth > right) _bar.Left = Math.Max(SystemParameters.VirtualScreenLeft, right - _bar.ActualWidth);
+            }
         };
 
         _bar.WindowStartupLocation = WindowStartupLocation.Manual;
@@ -165,14 +217,20 @@ internal sealed class MonitorController : IDisposable
             _bar.Left = -32000; // measured first, then placed; avoids a flash in the wrong place
             _bar.Top = -32000;
         }
+        _barAtCorner = !restored;
         _bar.Show();
         if (!restored)
         {
             _bar.UpdateLayout();
-            var area = SystemParameters.WorkArea;
-            _bar.Left = area.Right - _bar.ActualWidth - 16;
-            _bar.Top = area.Bottom - _bar.ActualHeight - 16;
+            PlaceInCorner(_bar);
         }
+    }
+
+    private static void PlaceInCorner(MonitorBar bar)
+    {
+        var area = SystemParameters.WorkArea;
+        bar.Left = area.Right - bar.ActualWidth - 16;
+        bar.Top = area.Bottom - bar.ActualHeight - 16;
     }
 
     private void CloseBar()

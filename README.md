@@ -140,15 +140,21 @@ Downloads and the other personal folders stay, though what is inside them can go
   Bin can't take is left alone. No list is shown first: a notification says what was moved, and it
   can be undone like any other clean.
 - **Activity monitor**, every part optional:
-  - a live number on the icon: CPU usage, download or upload speed, or disk writes;
-  - download and upload speed, CPU usage and disk writes when you point at the icon;
+  - a live number on the icon: CPU usage, download or upload speed, disk writes, or the highest temperature;
+  - download and upload speed, CPU usage, disk writes and temperatures when you point at the icon;
   - a small floating bar that stays on top of other windows. Drag it anywhere; right-click it to hide it.
 
 <p align="center">
-  <img src="docs/screenshots/monitor-bar.png" width="380" alt="Floating bar showing download, upload, CPU and disk writes">
+  <img src="docs/screenshots/monitor-bar.png" width="460" alt="Floating bar showing download, upload, CPU, disk writes and temperature">
 </p>
 
 The readings come from Windows itself (performance counters and network adapters) and never leave your PC.
+
+Temperatures need no administrator rights: NVMe drives report their own (the same reading Settings
+shows), other internal drives are read through Windows, and graphics cards the way Task Manager reads
+them — dedicated cards usually report one, integrated graphics usually don't. The processor's
+temperature can only be read with a kernel driver, which SweeplyForWindows doesn't install, so it isn't
+shown. Parts that can't be read are simply left out.
 
 ## Made for Windows
 

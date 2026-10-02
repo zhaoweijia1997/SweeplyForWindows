@@ -358,7 +358,7 @@ internal static class Snapshot
     /// <summary>Every kind of icon number at the three common icon sizes, enlarged 4x to check pixels.</summary>
     private static void RenderTrayIcons(string path)
     {
-        string[] texts = { "3", "37", "100", "0K", "85K", "0.4M", "12M", "123M", "1.2G", "—" };
+        string[] texts = { "3", "37", "100", "0K", "85K", "0.4M", "12M", "123M", "1.2G", "—", "39°", "105°" };
         int[] sizes = { 16, 24, 32 };
         const int zoom = 4, gap = 4;
         var visual = new DrawingVisual();
@@ -385,7 +385,10 @@ internal static class Snapshot
 
     private static void RenderMonitorBar(string path)
     {
-        var model = new Monitor.MonitorBarViewModel { Download = "1.2 MB/s", Upload = "35 KB/s", Cpu = "37%", DiskWrite = "3.4 MB/s" };
+        var model = new Monitor.MonitorBarViewModel
+        {
+            Download = "1.2 MB/s", Upload = "35 KB/s", Cpu = "37%", DiskWrite = "3.4 MB/s", Temperature = "41°C",
+        };
         var bar = new Monitor.MonitorBar(model)
         {
             WindowStartupLocation = WindowStartupLocation.Manual,

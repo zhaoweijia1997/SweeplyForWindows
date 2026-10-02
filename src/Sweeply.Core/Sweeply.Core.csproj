@@ -9,6 +9,8 @@
   <ItemGroup>
     <!-- The app builds made-up space results for screenshots. -->
     <InternalsVisibleTo Include="SweeplyForWindows" />
+    <!-- Tests read made-up drive and graphics answers without the hardware. -->
+    <InternalsVisibleTo Include="Sweeply.Core.Tests" />
   </ItemGroup>
 
 </Project>

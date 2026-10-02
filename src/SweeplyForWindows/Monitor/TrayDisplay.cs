@@ -11,6 +11,7 @@ public enum TrayDisplay
     Download,
     Upload,
     DiskWrite,
+    Temperature, // the hottest part that can be read
 }
 
 /// <summary>A choice of "Remind me to clean up" in the Settings page list, named in the current language.</summary>
