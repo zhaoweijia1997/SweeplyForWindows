@@ -13,11 +13,11 @@ public sealed class PageVisibilityConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
 }
 
-/// <summary>Collapsed for null or empty text.</summary>
+/// <summary>Collapsed for null or empty text; with the parameter "invert", visible only then.</summary>
 public sealed class TextVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-        string.IsNullOrEmpty(value as string) ? Visibility.Collapsed : Visibility.Visible;
+        string.IsNullOrEmpty(value as string) != (parameter as string == "invert") ? Visibility.Collapsed : Visibility.Visible;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
 }
@@ -27,6 +27,17 @@ public sealed class FalseVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
         value is true ? Visibility.Collapsed : Visibility.Visible;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
+}
+
+/// <summary>A width divided by the parameter (columns of a wrap panel whose rows each fit their own tallest item).</summary>
+public sealed class ColumnWidthConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is double width && int.TryParse(parameter as string, out int columns) && columns > 0 && width > columns
+            ? Math.Floor(width / columns) - 1 // the pixel left over stops the last column from wrapping
+            : double.NaN;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
 }

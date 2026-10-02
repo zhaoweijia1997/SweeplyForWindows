@@ -197,6 +197,20 @@ public sealed class SystemSampler : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Which adapters to add up, so that every byte counts once. Not the layers Windows stacks on a card
+    /// (WFP and QoS filters: they have no IP stack and repeat their card's counters, five times over for
+    /// a typical Wi-Fi card); and only real cards, because traffic through a VPN or proxy tunnel, or a
+    /// virtual machine's, also passes a real card. With no real card up (e.g. one bound to a Hyper-V
+    /// switch), the adapters that do have an IP stack.
+    /// </summary>
+    internal static List<T> Counted<T>(IReadOnlyList<(T Item, int Index, bool Hardware)> adapters)
+    {
+        var withStack = adapters.Where(a => a.Index > 0).ToList();
+        var hardware = withStack.Where(a => a.Hardware).ToList();
+        return (hardware.Count > 0 ? hardware : withStack).Select(a => a.Item).ToList();
+    }
+
     private Dictionary<string, (long Received, long Sent)> ReadNetwork()
     {
         long now = Environment.TickCount64;
@@ -206,10 +220,12 @@ public sealed class SystemSampler : IDisposable
             _adaptersListedAt = now;
             try
             {
-                _adapters = NetworkInterface.GetAllNetworkInterfaces()
+                var up = NetworkInterface.GetAllNetworkInterfaces()
                     .Where(a => a.OperationalStatus == OperationalStatus.Up &&
                                 a.NetworkInterfaceType is not (NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel))
-                    .ToArray();
+                    .Select(a => (Item: a, Index: NetworkAdapters.InterfaceIndex(a)))
+                    .ToList();
+                _adapters = Counted(up.Select(x => (x.Item, x.Index, x.Index > 0 && NetworkAdapters.IsHardwareInterface(x.Index))).ToList()).ToArray();
             }
             catch (NetworkInformationException) { _adapters = Array.Empty<NetworkInterface>(); }
         }

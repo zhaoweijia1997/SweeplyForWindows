@@ -92,16 +92,26 @@ public sealed class MonitorViewModel : ObservableObject
     /// <summary>The Hardware tab.</summary>
     public HardwareViewModel Hardware { get; } = new();
 
+    /// <summary>The Network tab.</summary>
+    public NetworkViewModel NetworkInfo { get; } = new();
+
     /// <summary>Tab numbers, in the order of the tabs.</summary>
-    public const int PerformanceTab = 0, HardwareTab = 1;
+    public const int PerformanceTab = 0, HardwareTab = 1, NetworkTab = 2;
 
     public int TabIndex
     {
         get => _tabIndex;
         set
         {
-            if (SetField(ref _tabIndex, value)) Hardware.SetShown(_shown && value == HardwareTab);
+            if (SetField(ref _tabIndex, value)) TellTabs();
         }
+    }
+
+    /// <summary>Only the tab in view reads what it shows.</summary>
+    private void TellTabs()
+    {
+        Hardware.SetShown(_shown && TabIndex == HardwareTab);
+        NetworkInfo.SetShown(_shown && TabIndex == NetworkTab);
     }
 
     private DateTime Now => _sampleNow ?? DateTime.UtcNow;
@@ -139,13 +149,14 @@ public sealed class MonitorViewModel : ObservableObject
     {
         _shown = shown;
         if (shown) Refresh(Now);
-        Hardware.SetShown(shown && TabIndex == HardwareTab);
+        TellTabs();
     }
 
     public void Relocalize()
     {
         foreach (var card in Cards) card.Relocalize();
         Hardware.Relocalize();
+        NetworkInfo.Relocalize();
         Refresh(Now);
     }
 
@@ -289,6 +300,7 @@ public sealed class MonitorViewModel : ObservableObject
         _thermalsRead = true;
         _temperature.Add(now, 51.0);
         Hardware.LoadSample(now);
+        NetworkInfo.LoadSample();
         Refresh(now);
     }
 }

@@ -353,6 +353,8 @@ internal static class Snapshot
                      ("zh-Hans", ThemeMode.Dark, MonitorViewModel.PerformanceTab, "monitor"),
                      ("en", ThemeMode.Light, MonitorViewModel.HardwareTab, "monitor-hardware"),
                      ("zh-Hans", ThemeMode.Light, MonitorViewModel.HardwareTab, "monitor-hardware"),
+                     ("en", ThemeMode.Light, MonitorViewModel.NetworkTab, "monitor-network"),
+                     ("zh-Hans", ThemeMode.Light, MonitorViewModel.NetworkTab, "monitor-network"),
                  })
         {
             Loc.Instance.SetLanguage(lang);
