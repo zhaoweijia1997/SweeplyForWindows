@@ -68,15 +68,15 @@ public class ThermalTests
     public void Drive_name_and_bus_come_from_the_device_descriptor()
     {
         // As read from this PC: an NVMe drive has no vendor string, a USB stick pads with spaces.
-        var nvme = ThermalSampler.ParseDeviceDescriptor(DeviceDescriptor(null, "YMTC YMSS2ED08B66MC", 17, false))!.Value;
+        var nvme = StorageQuery.ParseDeviceDescriptor(DeviceDescriptor(null, "YMTC YMSS2ED08B66MC", 17, false))!.Value;
         Assert.Equal("YMTC YMSS2ED08B66MC", nvme.Name);
         Assert.True(ThermalSampler.IsInternal(nvme.BusType, nvme.Removable));
 
-        var stick = ThermalSampler.ParseDeviceDescriptor(DeviceDescriptor("Lexar   ", "USB Flash Drive ", 7, true))!.Value;
+        var stick = StorageQuery.ParseDeviceDescriptor(DeviceDescriptor("Lexar   ", "USB Flash Drive ", 7, true))!.Value;
         Assert.Equal("Lexar USB Flash Drive", stick.Name);
         Assert.False(ThermalSampler.IsInternal(stick.BusType, stick.Removable));
 
-        Assert.Null(ThermalSampler.ParseDeviceDescriptor(new byte[16]));
+        Assert.Null(StorageQuery.ParseDeviceDescriptor(new byte[16]));
     }
 
     [Theory]

@@ -70,6 +70,7 @@ public sealed class MonitorViewModel : ObservableObject
     private DateTime _gpuNamesUtc = DateTime.MinValue;
     private DateTime? _sampleNow; // screenshots: a fixed "now"
     private int _tabIndex;
+    private bool _shown;
 
     public MonitorViewModel()
     {
@@ -88,7 +89,20 @@ public sealed class MonitorViewModel : ObservableObject
     /// <summary>The Performance tab's cards, in order.</summary>
     public IReadOnlyList<MetricCard> Cards { get; }
 
-    public int TabIndex { get => _tabIndex; set => SetField(ref _tabIndex, value); }
+    /// <summary>The Hardware tab.</summary>
+    public HardwareViewModel Hardware { get; } = new();
+
+    /// <summary>Tab numbers, in the order of the tabs.</summary>
+    public const int PerformanceTab = 0, HardwareTab = 1;
+
+    public int TabIndex
+    {
+        get => _tabIndex;
+        set
+        {
+            if (SetField(ref _tabIndex, value)) Hardware.SetShown(_shown && value == HardwareTab);
+        }
+    }
 
     private DateTime Now => _sampleNow ?? DateTime.UtcNow;
 
@@ -113,15 +127,25 @@ public sealed class MonitorViewModel : ObservableObject
         _thermals = readings;
         _thermalsRead = true;
         if (ThermalSampler.Hottest(readings) is { } hottest) _temperature.Add(Now, hottest.Celsius);
+        Hardware.OnThermals(readings, Now);
         Refresh(Now);
     }
 
-    /// <summary>The page was just shown: move the charts on to now, even before the next sample.</summary>
-    public void Shown() => Refresh(Now);
+    /// <summary>
+    /// The page came into view (window shown, not minimized, page selected) or went out of it. Coming
+    /// into view moves the charts on to now, even before the next sample.
+    /// </summary>
+    public void SetShown(bool shown)
+    {
+        _shown = shown;
+        if (shown) Refresh(Now);
+        Hardware.SetShown(shown && TabIndex == HardwareTab);
+    }
 
     public void Relocalize()
     {
         foreach (var card in Cards) card.Relocalize();
+        Hardware.Relocalize();
         Refresh(Now);
     }
 
@@ -264,6 +288,7 @@ public sealed class MonitorViewModel : ObservableObject
         };
         _thermalsRead = true;
         _temperature.Add(now, 51.0);
+        Hardware.LoadSample(now);
         Refresh(now);
     }
 }

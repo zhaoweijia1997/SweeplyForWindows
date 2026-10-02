@@ -1,6 +1,4 @@
 using System.Buffers.Binary;
-using System.Runtime.InteropServices;
-using System.Text;
 using Microsoft.Win32.SafeHandles;
 
 namespace Sweeply.Core.Monitoring;
@@ -31,12 +29,9 @@ public sealed class ThermalSampler : IDisposable
     /// <summary>How often to look again for drives and graphics cards.</summary>
     public static readonly TimeSpan LookAgainEvery = TimeSpan.FromMinutes(5);
 
-    private const int MaxDrives = 32;
-
     // STORAGE_BUS_TYPE of drives inside the PC: SCSI, ATA, RAID, SAS, SATA, NVMe, SCM, UFS.
     // Not USB, 1394, SD, MMC, iSCSI, virtual disks or Storage Spaces.
     private static readonly HashSet<int> InternalBuses = new() { 1, 3, 8, 10, 11, 17, 18, 19 };
-    private const int BusTypeNvme = 17;
 
     private readonly List<Drive> _drives = new();
     private readonly List<Adapter> _adapters = new();
@@ -97,9 +92,9 @@ public sealed class ThermalSampler : IDisposable
     private void LookForParts()
     {
         _drives.Clear();
-        for (int number = 0; number < MaxDrives; number++)
+        foreach (var device in StorageQuery.ListDevices())
         {
-            if (FindDrive(number) is { } drive) _drives.Add(drive);
+            if (FindDrive(device) is { } drive) _drives.Add(drive);
         }
         var driveNames = UniqueNames(_drives.Select(d => d.Name).ToList());
         for (int i = 0; i < _drives.Count; i++) _drives[i] = _drives[i] with { Name = driveNames[i] };
@@ -127,70 +122,40 @@ public sealed class ThermalSampler : IDisposable
 
     private sealed record Drive(int Number, string Name, bool NvmeLog);
 
-    private static Drive? FindDrive(int number)
+    private static Drive? FindDrive(StorageQuery.Device device)
     {
-        using var handle = Storage.Open(number);
+        if (!IsInternal(device.BusType, device.Removable)) return null;
+        using var handle = StorageQuery.Open(device.Number);
         if (handle.IsInvalid) return null;
-        var buffer = new byte[1024];
-        if (!Storage.Query(handle, Storage.PropertyQuery(Storage.StorageDeviceProperty), buffer, out int length)) return null;
-        if (ParseDeviceDescriptor(buffer.AsSpan(0, length)) is not { } device || !IsInternal(device.BusType, device.Removable))
-            return null;
-
-        string name = device.Name.Length > 0 ? device.Name : $"PhysicalDrive{number}";
-        if (device.BusType == BusTypeNvme && ReadNvmeHealth(handle) is not null) return new Drive(number, name, NvmeLog: true);
-        if (ReadTemperatureProperty(handle) is not null) return new Drive(number, name, NvmeLog: false);
+        if (device.BusType == StorageQuery.BusTypeNvme && ReadNvmeHealth(handle) is not null) return new Drive(device.Number, device.Name, NvmeLog: true);
+        if (ReadTemperatureProperty(handle) is not null) return new Drive(device.Number, device.Name, NvmeLog: false);
         return null;
     }
 
     private static double? ReadDrive(int number, bool nvmeLog)
     {
-        using var handle = Storage.Open(number);
+        using var handle = StorageQuery.Open(number);
         if (handle.IsInvalid) return null;
         return nvmeLog ? ReadNvmeHealth(handle) : ReadTemperatureProperty(handle);
     }
 
-    private static double? ReadNvmeHealth(SafeFileHandle handle)
-    {
-        var output = new byte[Storage.NvmeHealthQueryLength];
-        return Storage.Query(handle, Storage.NvmeHealthQuery(), output, out int length)
-            ? ParseNvmeHealth(output.AsSpan(0, length))
-            : null;
-    }
+    private static double? ReadNvmeHealth(SafeFileHandle handle) =>
+        StorageQuery.NvmeHealthLog(handle) is { } log ? ParseNvmeHealth(log) : null;
 
-    private static double? ReadTemperatureProperty(SafeFileHandle handle)
-    {
-        var output = new byte[1024];
-        return Storage.Query(handle, Storage.PropertyQuery(Storage.StorageDeviceTemperatureProperty), output, out int length)
-            ? ParseTemperatureDescriptor(output.AsSpan(0, length))
-            : null;
-    }
+    private static double? ReadTemperatureProperty(SafeFileHandle handle) =>
+        StorageQuery.TemperatureDescriptor(handle) is { } descriptor ? ParseTemperatureDescriptor(descriptor) : null;
 
     internal static bool IsInternal(int busType, bool removable) => !removable && InternalBuses.Contains(busType);
 
-    /// <summary>Name, bus type and "removable" from a STORAGE_DEVICE_DESCRIPTOR.</summary>
-    internal static (string Name, int BusType, bool Removable)? ParseDeviceDescriptor(ReadOnlySpan<byte> data)
-    {
-        if (data.Length < 32) return null;
-        string vendor = AsciiAt(data, BinaryPrimitives.ReadInt32LittleEndian(data[12..]));
-        string product = AsciiAt(data, BinaryPrimitives.ReadInt32LittleEndian(data[16..]));
-        string name = vendor.Length == 0 ? product : product.Length == 0 ? vendor : vendor + " " + product;
-        return (name, BinaryPrimitives.ReadInt32LittleEndian(data[28..]), data[10] != 0);
-    }
-
     /// <summary>
-    /// The composite temperature from an NVMe health log, as returned in a STORAGE_PROTOCOL_DATA_DESCRIPTOR:
-    /// Version and Size, then STORAGE_PROTOCOL_SPECIFIC_DATA, whose data offset counts from itself.
-    /// The log keeps the temperature in kelvin in bytes 1 and 2; 0 means the drive does not report one.
+    /// The composite temperature from an NVMe health log (a STORAGE_PROTOCOL_DATA_DESCRIPTOR). The log
+    /// keeps it in kelvin in bytes 1 and 2; 0 means the drive does not report one.
     /// </summary>
-    internal static double? ParseNvmeHealth(ReadOnlySpan<byte> data)
+    internal static double? ParseNvmeHealth(ReadOnlySpan<byte> descriptor)
     {
-        const int specific = 8;
-        if (data.Length < specific + 24) return null;
-        int offset = BinaryPrimitives.ReadInt32LittleEndian(data[(specific + 16)..]);
-        int length = BinaryPrimitives.ReadInt32LittleEndian(data[(specific + 20)..]);
-        int start = specific + offset;
-        if (offset <= 0 || length < 3 || start + 3 > data.Length) return null;
-        int kelvin = BinaryPrimitives.ReadUInt16LittleEndian(data[(start + 1)..]);
+        var log = StorageQuery.ProtocolData(descriptor);
+        if (log.Length < 3) return null;
+        int kelvin = BinaryPrimitives.ReadUInt16LittleEndian(log[1..]);
         return kelvin == 0 ? null : Plausible(kelvin - 273.15);
     }
 
@@ -201,14 +166,6 @@ public sealed class ThermalSampler : IDisposable
         // then 16-byte STORAGE_TEMPERATURE_INFO entries: Index, Temperature, ...
         if (data.Length < 24 + 16 || BinaryPrimitives.ReadUInt16LittleEndian(data[12..]) == 0) return null;
         return Plausible(BinaryPrimitives.ReadInt16LittleEndian(data[26..]));
-    }
-
-    private static string AsciiAt(ReadOnlySpan<byte> data, int offset)
-    {
-        if (offset <= 0 || offset >= data.Length) return "";
-        var rest = data[offset..];
-        int end = rest.IndexOf((byte)0);
-        return Encoding.ASCII.GetString(end < 0 ? rest : rest[..end]).Trim();
     }
 
     // ---- Graphics cards ----
@@ -239,55 +196,5 @@ public sealed class ThermalSampler : IDisposable
     }
 
     /// <summary>A sensor that is missing or broken can report nonsense; such a value is not shown.</summary>
-    private static double? Plausible(double celsius) => celsius > -40 && celsius < 150 ? celsius : null;
-
-    private static class Storage
-    {
-        public const int StorageDeviceProperty = 0;
-        public const int StorageDeviceTemperatureProperty = 52;
-        private const int StorageDeviceProtocolSpecificProperty = 50;
-        private const uint IoctlStorageQueryProperty = 0x002D1400;
-        private const int NvmeLogLength = 512;
-        private const int ProtocolSpecificDataLength = 40;
-        public const int NvmeHealthQueryLength = 8 + ProtocolSpecificDataLength + NvmeLogLength;
-
-        /// <summary>
-        /// Access 0 only asks the driver about the device; it needs no administrator rights and
-        /// can neither read nor write the drive's contents.
-        /// </summary>
-        public static SafeFileHandle Open(int number) =>
-            CreateFileW($@"\\.\PhysicalDrive{number}", 0, 3 /* share read and write */, IntPtr.Zero, 3 /* OPEN_EXISTING */, 0, IntPtr.Zero);
-
-        public static bool Query(SafeFileHandle handle, byte[] input, byte[] output, out int length) =>
-            DeviceIoControl(handle, IoctlStorageQueryProperty, input, input.Length, output, output.Length, out length, IntPtr.Zero);
-
-        /// <summary>STORAGE_PROPERTY_QUERY: property id, PropertyStandardQuery, no extra parameters.</summary>
-        public static byte[] PropertyQuery(int propertyId)
-        {
-            var query = new byte[12];
-            BinaryPrimitives.WriteInt32LittleEndian(query, propertyId);
-            return query;
-        }
-
-        /// <summary>STORAGE_PROPERTY_QUERY followed by STORAGE_PROTOCOL_SPECIFIC_DATA asking for the NVMe health log.</summary>
-        public static byte[] NvmeHealthQuery()
-        {
-            var query = new byte[NvmeHealthQueryLength];
-            var span = query.AsSpan();
-            BinaryPrimitives.WriteInt32LittleEndian(span, StorageDeviceProtocolSpecificProperty);
-            BinaryPrimitives.WriteInt32LittleEndian(span[8..], 3);    // ProtocolTypeNvme
-            BinaryPrimitives.WriteInt32LittleEndian(span[12..], 2);   // NVMeDataTypeLogPage
-            BinaryPrimitives.WriteInt32LittleEndian(span[16..], 2);   // log page 02h: SMART / health information
-            BinaryPrimitives.WriteInt32LittleEndian(span[24..], ProtocolSpecificDataLength); // data follows the struct
-            BinaryPrimitives.WriteInt32LittleEndian(span[28..], NvmeLogLength);
-            return query;
-        }
-
-        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-        private static extern SafeFileHandle CreateFileW(string name, uint access, uint share, IntPtr security, uint creation, uint flags, IntPtr template);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool DeviceIoControl(SafeFileHandle device, uint code, byte[] input, int inputLength,
-            byte[] output, int outputLength, out int returned, IntPtr overlapped);
-    }
+    internal static double? Plausible(double celsius) => celsius > -40 && celsius < 150 ? celsius : null;
 }

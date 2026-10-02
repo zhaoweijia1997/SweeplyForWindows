@@ -61,5 +61,7 @@ public class LocalizationTests
             Assert.Contains($"kind.{k}", en.Keys);
         foreach (var c in Enum.GetNames<SpaceMoveCheck>().Where(c => c != nameof(SpaceMoveCheck.Ok)))
             Assert.Contains($"space.why.{c}", en.Keys);
+        foreach (var w in Enum.GetNames<Sweeply.Core.Monitoring.DriveWarnings>().Where(w => w != "None"))
+            Assert.Contains($"hw.warn.{w}", en.Keys);
     }
 }

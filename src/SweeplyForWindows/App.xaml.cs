@@ -201,7 +201,7 @@ public partial class App : Application
         if (_window is null || _viewModel is null || _monitor is null) return;
         bool shown = _window.IsVisible && _window.WindowState != WindowState.Minimized
                      && _viewModel.PageIndex == MainViewModel.MonitorPage;
-        if (shown) _viewModel.Monitor.Shown();
+        _viewModel.Monitor.SetShown(shown);
         _monitor.SetPageShown(shown);
     }
 
@@ -345,13 +345,21 @@ internal static class Snapshot
             window.Close();
         }
 
-        // The Monitor page, with made-up activity.
-        foreach (var (lang, theme) in new[] { ("en", ThemeMode.Light), ("zh-Hans", ThemeMode.Light), ("zh-Hans", ThemeMode.Dark) })
+        // The Monitor page, with made-up activity and hardware.
+        foreach (var (lang, theme, tab, name) in new[]
+                 {
+                     ("en", ThemeMode.Light, MonitorViewModel.PerformanceTab, "monitor"),
+                     ("zh-Hans", ThemeMode.Light, MonitorViewModel.PerformanceTab, "monitor"),
+                     ("zh-Hans", ThemeMode.Dark, MonitorViewModel.PerformanceTab, "monitor"),
+                     ("en", ThemeMode.Light, MonitorViewModel.HardwareTab, "monitor-hardware"),
+                     ("zh-Hans", ThemeMode.Light, MonitorViewModel.HardwareTab, "monitor-hardware"),
+                 })
         {
             Loc.Instance.SetLanguage(lang);
             var vm = new MainViewModel(KnownPaths.FromSystem(), new Settings(), new CleanHistory(null));
             vm.LoadSample();
             vm.Monitor.LoadSample();
+            vm.Monitor.TabIndex = tab;
             vm.PageIndex = MainViewModel.MonitorPage;
             var window = new MainWindow(vm, scanOnOpen: false)
             {
@@ -365,7 +373,7 @@ internal static class Snapshot
             window.Show();
             WaitForAnimations(TimeSpan.FromMilliseconds(900));
             string themeName = theme == ThemeMode.Dark ? "dark" : "light";
-            Save(window, theme == ThemeMode.Dark, Path.Combine(folder, $"monitor-{lang}-{themeName}.png"));
+            Save(window, theme == ThemeMode.Dark, Path.Combine(folder, $"{name}-{lang}-{themeName}.png"));
             window.Close();
         }
 
