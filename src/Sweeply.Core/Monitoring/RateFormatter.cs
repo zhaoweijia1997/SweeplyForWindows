@@ -24,6 +24,21 @@ public static class RateFormatter
         return value.ToString(format, culture) + " " + Units[unit];
     }
 
+    /// <summary>A round chart scale from <see cref="ChartScale.Rate"/>: "200 KB/s", "5 MB/s", "1 GB/s".</summary>
+    public static string Scale(double bytesPerSecond, CultureInfo? culture = null)
+    {
+        culture ??= CultureInfo.CurrentCulture;
+        double value = Clean(bytesPerSecond);
+        if (value < 999.5) return value.ToString("0", culture) + " B/s";
+        int unit = -1;
+        while (value >= 999.5 && unit < Units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+        return value.ToString("0.#", culture) + " " + Units[unit];
+    }
+
     /// <summary>
     /// At most four characters, for a notification-area icon: "0K", "85K", "0.4M", "12M", "1.2G".
     /// Anything under 1 KB/s shows as "0K" so the icon does not flicker between units when idle.

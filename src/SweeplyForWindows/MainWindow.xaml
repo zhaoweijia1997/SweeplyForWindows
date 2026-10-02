@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:SweeplyForWindows"
         xmlns:loc="clr-namespace:SweeplyForWindows.Localization"
+        xmlns:mon="clr-namespace:SweeplyForWindows.Monitor"
         Title="SweeplyForWindows" Width="1000" Height="720" MinWidth="780" MinHeight="520"
         Icon="Assets/app.ico"
         WindowStartupLocation="CenterScreen">
@@ -126,6 +127,51 @@
                 </Button>
             </Grid>
         </DataTemplate>
+
+        <!-- One card of the Monitor page's Performance tab: name and big number, a line of detail, the
+             chart of the last minutes (its scale at the top left), and what each line of the chart is. -->
+        <DataTemplate x:Key="MetricCardTemplate">
+            <Border Style="{StaticResource Card}" Margin="0,0,10,10" Padding="16,12,16,10">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding Value}" FontSize="20" FontWeight="SemiBold"
+                                   Foreground="{Binding Brush}" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular"/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="{Binding Glyph}" FontSize="16"
+                                       Foreground="{Binding Brush}" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </DockPanel>
+                    <TextBlock Grid.Row="1" Style="{StaticResource Secondary}" FontSize="12" Margin="0,2,0,0" MinHeight="16"
+                               Text="{Binding Detail}" ToolTip="{Binding Detail}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                    <Grid Grid.Row="2" Height="92" Margin="0,8,0,6">
+                        <Border BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1"/>
+                        <mon:LiveChart Points="{Binding Points}" Points2="{Binding Points2}" Minimum="{Binding Minimum}" Maximum="{Binding Maximum}"
+                                       WindowSeconds="{Binding WindowSeconds}" MaxGapSeconds="{Binding MaxGapSeconds}" Stroke="{Binding Brush}"
+                                       GridBrush="{DynamicResource CardStrokeColorDefaultBrush}"/>
+                        <TextBlock Text="{Binding ScaleText}" FontSize="11" Margin="2,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    </Grid>
+                    <WrapPanel Grid.Row="3" Orientation="Horizontal">
+                        <!-- With two series: a solid swatch for the first line and a dashed one for the second. -->
+                        <Rectangle Width="12" Height="2" Fill="{Binding Brush}" Margin="0,0,6,0" VerticalAlignment="Center"
+                                   Visibility="{Binding Legend2, Converter={StaticResource TextVisibility}}"/>
+                        <TextBlock Style="{StaticResource Secondary}" FontSize="12" Text="{Binding Legend1}" Margin="0,0,16,0"
+                                   TextWrapping="NoWrap" Typography.NumeralAlignment="Tabular"/>
+                        <Line X1="0" Y1="1" X2="12" Y2="1" Stroke="{Binding Brush}" StrokeThickness="2" StrokeDashArray="1.5 1" Margin="0,0,6,0"
+                              VerticalAlignment="Center" Visibility="{Binding Legend2, Converter={StaticResource TextVisibility}}"/>
+                        <TextBlock Style="{StaticResource Secondary}" FontSize="12" Text="{Binding Legend2}" TextWrapping="NoWrap"
+                                   Typography.NumeralAlignment="Tabular" Visibility="{Binding Legend2, Converter={StaticResource TextVisibility}}"/>
+                    </WrapPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
     </Window.Resources>
 
     <Grid>
@@ -162,6 +208,12 @@
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Style="{StaticResource NavGlyph}" Text="&#xEDA2;"/>
                         <TextBlock Text="{Binding [nav.space], Source={x:Static loc:Loc.Instance}}" Margin="14,0,0,0"/>
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem Padding="10,9">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource NavGlyph}" Text="&#xE9D9;"/>
+                        <TextBlock Text="{Binding [nav.monitor], Source={x:Static loc:Loc.Instance}}" Margin="14,0,0,0"/>
                     </StackPanel>
                 </ListBoxItem>
                 <ListBoxItem Padding="10,9">
@@ -584,9 +636,36 @@
                     </Grid>
                 </Grid>
 
+                <!-- ===== Monitor: what this PC is doing right now ===== -->
+                <Grid Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=2}">
+                    <Grid DataContext="{Binding Monitor}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <StackPanel Margin="32,26,32,10">
+                            <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [monitor.title], Source={x:Static loc:Loc.Instance}}"/>
+                            <TextBlock Style="{StaticResource Secondary}" Margin="0,6,0,0" Text="{Binding [monitor.subtitle], Source={x:Static loc:Loc.Instance}}"/>
+                        </StackPanel>
+                        <TabControl Grid.Row="1" Margin="32,0,32,12" SelectedIndex="{Binding TabIndex}">
+                            <TabItem Header="{Binding [monitor.tab.performance], Source={x:Static loc:Loc.Instance}}">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
+                                    <ItemsControl ItemsSource="{Binding Cards}" ItemTemplate="{StaticResource MetricCardTemplate}" Margin="0,0,-10,0">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <UniformGrid Columns="2"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </TabItem>
+                        </TabControl>
+                    </Grid>
+                </Grid>
+
                 <!-- ===== Settings ===== -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,26,32,24"
-                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=2}">
+                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=3}">
                     <StackPanel MaxWidth="820" HorizontalAlignment="Left">
                         <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [settings.title], Source={x:Static loc:Loc.Instance}}"/>
 
@@ -755,7 +834,7 @@
 
                 <!-- ===== Support ===== -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,26,32,24"
-                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=3}">
+                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=4}">
                     <StackPanel MaxWidth="820" HorizontalAlignment="Left">
                         <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [support.title], Source={x:Static loc:Loc.Instance}}"/>
                         <TextBlock Margin="0,14,0,0" TextWrapping="Wrap" FontSize="14"
@@ -796,7 +875,7 @@
 
                 <!-- ===== About ===== -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,26,32,24"
-                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=4}">
+                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=5}">
                     <StackPanel MaxWidth="720" HorizontalAlignment="Left">
                         <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [about.title], Source={x:Static loc:Loc.Instance}}"/>
                         <Border Style="{StaticResource Card}" Margin="0,18,0,0" Padding="20">

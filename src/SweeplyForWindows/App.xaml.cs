@@ -128,6 +128,17 @@ public partial class App : Application
         _viewModel.MonitorSettingsChanged += _monitor.Apply;
         _monitor.Apply();
 
+        // The Monitor page gets the same samples. While it is in view, sampling runs even with the
+        // icon number, details and bar all off; once it is out of view, it is back to the settings.
+        _monitor.Sampled += _viewModel.Monitor.OnSample;
+        _monitor.ThermalsRead += _viewModel.Monitor.OnThermals;
+        _window.IsVisibleChanged += (_, _) => UpdateMonitorPage();
+        _window.StateChanged += (_, _) => UpdateMonitorPage();
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.PageIndex)) UpdateMonitorPage();
+        };
+
         _reminder = new ReminderController(_settings, _tray, KnownPaths.FromSystem());
         _reminder.Shown += () =>
         {
@@ -183,6 +194,15 @@ public partial class App : Application
         string f = args[i + 1].Trim().TrimEnd('"');
         if (f.Length == 2 && f[1] == ':') f += '\\';
         return f.Length == 0 ? null : f;
+    }
+
+    private void UpdateMonitorPage()
+    {
+        if (_window is null || _viewModel is null || _monitor is null) return;
+        bool shown = _window.IsVisible && _window.WindowState != WindowState.Minimized
+                     && _viewModel.PageIndex == MainViewModel.MonitorPage;
+        if (shown) _viewModel.Monitor.Shown();
+        _monitor.SetPageShown(shown);
     }
 
     private void ShowMainWindow()
@@ -322,6 +342,30 @@ internal static class Snapshot
             window.Show();
             WaitForAnimations(TimeSpan.FromMilliseconds(900));
             Save(window, false, Path.Combine(folder, $"{name}-{lang}-light.png"));
+            window.Close();
+        }
+
+        // The Monitor page, with made-up activity.
+        foreach (var (lang, theme) in new[] { ("en", ThemeMode.Light), ("zh-Hans", ThemeMode.Light), ("zh-Hans", ThemeMode.Dark) })
+        {
+            Loc.Instance.SetLanguage(lang);
+            var vm = new MainViewModel(KnownPaths.FromSystem(), new Settings(), new CleanHistory(null));
+            vm.LoadSample();
+            vm.Monitor.LoadSample();
+            vm.PageIndex = MainViewModel.MonitorPage;
+            var window = new MainWindow(vm, scanOnOpen: false)
+            {
+                ThemeMode = theme,
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -32000,
+                Top = -32000,
+                ShowInTaskbar = false,
+                ShowActivated = false,
+            };
+            window.Show();
+            WaitForAnimations(TimeSpan.FromMilliseconds(900));
+            string themeName = theme == ThemeMode.Dark ? "dark" : "light";
+            Save(window, theme == ThemeMode.Dark, Path.Combine(folder, $"monitor-{lang}-{themeName}.png"));
             window.Close();
         }
 

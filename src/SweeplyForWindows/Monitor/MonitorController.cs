@@ -9,20 +9,25 @@ namespace SweeplyForWindows.Monitor;
 
 /// <summary>
 /// Samples system activity once a second, and temperatures every 10 seconds, while anything shows
-/// them (icon number, icon details or the floating bar), and stops sampling when nothing does.
+/// them (icon number, icon details, the floating bar or the Monitor page), and stops sampling when
+/// nothing does. While the Monitor page is shown it also reads the graphics cards' use, and the
+/// temperatures every 2 seconds.
 /// </summary>
 internal sealed class MonitorController : IDisposable
 {
     // Temperatures change slowly; there is no need to ask the drives every second.
     private static readonly TimeSpan ThermalEvery = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan PageThermalEvery = TimeSpan.FromSeconds(2);
 
     private readonly Settings _settings;
     private readonly TrayIcon _tray;
     private readonly Dispatcher _dispatcher;
     private readonly MonitorBarViewModel _barModel = new();
+    private readonly SemaphoreSlim _thermalWake = new(0, 1); // the page opened: read the temperatures now
     private MonitorBar? _bar;
     private bool _barAtCorner; // placed in the corner by the app, not dragged: keep its right edge there
     private CancellationTokenSource? _sampling;
+    private volatile bool _pageShown;
     private IReadOnlyList<ThermalReading> _thermals = Array.Empty<ThermalReading>(); // the latest, used every second
     private string? _iconKey; // what the icon currently shows, to redraw only on change
 
@@ -38,6 +43,12 @@ internal sealed class MonitorController : IDisposable
     /// <summary>The floating bar's own menu asked to hide it.</summary>
     public event Action? HideBarRequested;
 
+    /// <summary>A new second of activity, on the UI thread.</summary>
+    public event Action<SystemSample>? Sampled;
+
+    /// <summary>New temperatures, on the UI thread.</summary>
+    public event Action<IReadOnlyList<ThermalReading>>? ThermalsRead;
+
     /// <summary>Brings everything in line with the current settings.</summary>
     public void Apply()
     {
@@ -47,15 +58,25 @@ internal sealed class MonitorController : IDisposable
         if (_settings.ShowMonitorBar) ShowBar();
         else CloseBar();
 
-        bool needed = _settings.TrayDisplay != TrayDisplay.AppIcon || _settings.TrayToolTipStats || _settings.ShowMonitorBar;
+        bool needed = _pageShown || _settings.TrayDisplay != TrayDisplay.AppIcon || _settings.TrayToolTipStats || _settings.ShowMonitorBar;
         if (needed) StartSampling();
         else StopSampling();
+    }
+
+    /// <summary>The Monitor page came into view (window shown, not minimized, page selected) or went out of it.</summary>
+    public void SetPageShown(bool shown)
+    {
+        if (_pageShown == shown) return;
+        _pageShown = shown;
+        Apply();
+        if (shown && _thermalWake.CurrentCount == 0) _thermalWake.Release();
     }
 
     public void Dispose()
     {
         StopSampling();
         CloseBar();
+        // _thermalWake is not disposed: a loop that is just finishing may still touch it, and it holds no handle.
     }
 
     private void StartSampling()
@@ -72,11 +93,13 @@ internal sealed class MonitorController : IDisposable
             {
                 while (await timer.WaitForNextTickAsync(token))
                 {
-                    var sample = sampler.Sample();
+                    var sample = sampler.Sample(includeGpu: _pageShown); // only the page shows the graphics cards
                     bool hasCpu = sampler.HasCpu, hasDisk = sampler.HasDiskWrite;
                     _ = _dispatcher.BeginInvoke(() => // not awaited: the next tick must not wait for the screen
                     {
-                        if (!token.IsCancellationRequested) Show(sample, hasCpu, hasDisk);
+                        if (token.IsCancellationRequested) return;
+                        Show(sample, hasCpu, hasDisk);
+                        Sampled?.Invoke(sample);
                     });
                 }
             }
@@ -87,19 +110,21 @@ internal sealed class MonitorController : IDisposable
         Task.Run(async () =>
         {
             using var thermals = new ThermalSampler();
-            using var timer = new PeriodicTimer(ThermalEvery);
             try
             {
-                do
+                while (true)
                 {
                     IReadOnlyList<ThermalReading> readings;
                     try { readings = thermals.Read(); }
                     catch (Exception) { readings = Array.Empty<ThermalReading>(); } // temperatures are extra; never stop for them
                     _ = _dispatcher.BeginInvoke(() =>
                     {
-                        if (!token.IsCancellationRequested) _thermals = readings;
+                        if (token.IsCancellationRequested) return;
+                        _thermals = readings;
+                        ThermalsRead?.Invoke(readings);
                     });
-                } while (await timer.WaitForNextTickAsync(token));
+                    await _thermalWake.WaitAsync(_pageShown ? PageThermalEvery : ThermalEvery, token);
+                }
             }
             catch (OperationCanceledException) { }
         });

@@ -68,7 +68,7 @@ public sealed class ThermalSampler : IDisposable
                 readings.Add(new ThermalReading(ThermalPart.Graphics, adapter.Name, celsius));
             else
             {
-                Gpu.Close(adapter.Handle);
+                GraphicsAdapters.Close(adapter.Handle);
                 _adapters.Remove(adapter);
             }
         }
@@ -217,40 +217,24 @@ public sealed class ThermalSampler : IDisposable
 
     private void FindAdapters()
     {
-        var list = new Gpu.EnumAdapters2();
-        if (Gpu.D3DKMTEnumAdapters2(ref list) != 0 || list.NumAdapters == 0) return;
-
-        int size = Marshal.SizeOf<Gpu.AdapterInfo>();
-        int count = (int)list.NumAdapters;
-        IntPtr buffer = Marshal.AllocHGlobal(size * count);
-        try
+        foreach (var adapter in GraphicsAdapters.OpenAll())
         {
-            list.Adapters = buffer;
-            if (Gpu.D3DKMTEnumAdapters2(ref list) != 0) return; // e.g. an adapter was just added; look again later
-            for (int i = 0; i < (int)list.NumAdapters; i++)
-            {
-                var info = Marshal.PtrToStructure<Gpu.AdapterInfo>(buffer + i * size);
-                if (ReadAdapter(info.Handle) is not null && Gpu.Name(info.Handle) is { Length: > 0 } name)
-                    _adapters.Add(new Adapter(info.Handle, name));
-                else
-                    Gpu.Close(info.Handle);
-            }
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(buffer);
+            if (ReadAdapter(adapter.Handle) is not null && GraphicsAdapters.Name(adapter.Handle) is { Length: > 0 } name)
+                _adapters.Add(new Adapter(adapter.Handle, name));
+            else
+                GraphicsAdapters.Close(adapter.Handle);
         }
     }
 
     private static double? ReadAdapter(uint handle) =>
-        Gpu.Temperature(handle) is uint deciCelsius ? GraphicsCelsius(deciCelsius) : null;
+        GraphicsAdapters.Temperature(handle) is uint deciCelsius ? GraphicsCelsius(deciCelsius) : null;
 
     /// <summary>Graphics drivers report tenths of a degree; 0 means no reading (integrated graphics, or asleep).</summary>
     internal static double? GraphicsCelsius(uint deciCelsius) => deciCelsius == 0 ? null : Plausible(deciCelsius / 10.0);
 
     private void CloseAdapters()
     {
-        foreach (var adapter in _adapters) Gpu.Close(adapter.Handle);
+        foreach (var adapter in _adapters) GraphicsAdapters.Close(adapter.Handle);
         _adapters.Clear();
     }
 
@@ -305,91 +289,5 @@ public sealed class ThermalSampler : IDisposable
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool DeviceIoControl(SafeFileHandle device, uint code, byte[] input, int inputLength,
             byte[] output, int outputLength, out int returned, IntPtr overlapped);
-    }
-
-    private static class Gpu
-    {
-        private const int AdapterRegistryInfo = 8;  // KMTQAITYPE_ADAPTERREGISTRYINFO
-        private const int AdapterPerfData = 62;     // KMTQAITYPE_ADAPTERPERFDATA (Windows 10 2004 and later)
-        private const int RegistryInfoLength = 4 * 260 * 2; // four WCHAR[MAX_PATH] strings
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct AdapterInfo
-        {
-            public uint Handle;
-            public uint LuidLowPart;
-            public int LuidHighPart;
-            public uint NumOfSources;
-            public int PrecisePresentRegionsPreferred;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct EnumAdapters2
-        {
-            public uint NumAdapters;
-            public IntPtr Adapters;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct QueryAdapterInfo
-        {
-            public uint Adapter;
-            public int Type;
-            public IntPtr Data;
-            public uint DataSize;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct AdapterPerfDataResult
-        {
-            public uint PhysicalAdapterIndex;
-            public ulong MemoryFrequency, MaxMemoryFrequency, MaxMemoryFrequencyOC, MemoryBandwidth, PcieBandwidth;
-            public uint FanRpm, Power, Temperature; // Temperature in tenths of a degree Celsius
-            public byte PowerStateOverride;
-        }
-
-        /// <summary>The adapter's temperature in tenths of a degree, or null when the query failed.</summary>
-        public static uint? Temperature(uint adapter)
-        {
-            int size = Marshal.SizeOf<AdapterPerfDataResult>();
-            IntPtr data = Marshal.AllocHGlobal(size);
-            try
-            {
-                Marshal.StructureToPtr(new AdapterPerfDataResult(), data, false);
-                var query = new QueryAdapterInfo { Adapter = adapter, Type = AdapterPerfData, Data = data, DataSize = (uint)size };
-                if (D3DKMTQueryAdapterInfo(ref query) != 0) return null;
-                return Marshal.PtrToStructure<AdapterPerfDataResult>(data).Temperature;
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(data);
-            }
-        }
-
-        /// <summary>The adapter's name as Device Manager shows it, e.g. "NVIDIA GeForce RTX 4060".</summary>
-        public static string? Name(uint adapter)
-        {
-            IntPtr data = Marshal.AllocHGlobal(RegistryInfoLength);
-            try
-            {
-                var query = new QueryAdapterInfo { Adapter = adapter, Type = AdapterRegistryInfo, Data = data, DataSize = RegistryInfoLength };
-                return D3DKMTQueryAdapterInfo(ref query) == 0 ? Marshal.PtrToStringUni(data)?.Trim() : null;
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(data);
-            }
-        }
-
-        public static void Close(uint adapter) => D3DKMTCloseAdapter(ref adapter);
-
-        [DllImport("gdi32.dll")]
-        public static extern int D3DKMTEnumAdapters2(ref EnumAdapters2 adapters);
-
-        [DllImport("gdi32.dll")]
-        private static extern int D3DKMTQueryAdapterInfo(ref QueryAdapterInfo query);
-
-        [DllImport("gdi32.dll")]
-        private static extern int D3DKMTCloseAdapter(ref uint adapter); // D3DKMT_CLOSEADAPTER holds just the handle
     }
 }

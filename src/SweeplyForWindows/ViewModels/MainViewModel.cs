@@ -224,10 +224,13 @@ public sealed class MainViewModel : ObservableObject
     public Func<IntPtr>? OwnerHandle { get; set; }
 
     /// <summary>Page numbers, in the order of the navigation list.</summary>
-    public const int CleanPage = 0, SpacePage = 1, SettingsPage = 2, SupportPage = 3, AboutPage = 4;
+    public const int CleanPage = 0, SpacePage = 1, MonitorPage = 2, SettingsPage = 3, SupportPage = 4, AboutPage = 5;
 
     /// <summary>The Space page: what takes up the space on a drive or in a folder.</summary>
     public SpaceViewModel Space { get; }
+
+    /// <summary>The Monitor page: performance charts, and later hardware and network.</summary>
+    public MonitorViewModel Monitor { get; } = new();
 
     public int PageIndex
     {
@@ -854,6 +857,7 @@ public sealed class MainViewModel : ObservableObject
         foreach (var option in ReminderOptions) option.Relocalize();
         RefreshHistory();
         Space.Relocalize();
+        Monitor.Relocalize();
         OnAllPropertiesChanged();
     }
 
