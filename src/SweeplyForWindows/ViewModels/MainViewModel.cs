@@ -35,6 +35,7 @@ public sealed class GroupViewModel : ObservableObject
 
 public sealed class MainViewModel : ObservableObject
 {
+    private readonly KnownPaths _paths;
     private readonly Settings _settings;
     private int _pageIndex;
     private bool _isBusy;
@@ -66,6 +67,7 @@ public sealed class MainViewModel : ObservableObject
     /// <param name="history">Past cleans; null loads them from <see cref="HistoryFile"/>.</param>
     public MainViewModel(KnownPaths paths, Settings settings, CleanHistory? history = null)
     {
+        _paths = paths;
         _settings = settings;
         _history = history ?? CleanHistory.Load(HistoryFile);
         foreach (var category in CategoryCatalog.Create(paths))
@@ -211,6 +213,9 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>Window handle that owns the Recycle Bin warnings. Set by the window.</summary>
     public Func<IntPtr>? OwnerHandle { get; set; }
 
+    /// <summary>Page numbers, in the order of the navigation list.</summary>
+    public const int CleanPage = 0, SettingsPage = 1;
+
     public int PageIndex
     {
         get => _pageIndex;
@@ -285,6 +290,24 @@ public sealed class MainViewModel : ObservableObject
             _settings.Save();
             OnPropertyChanged();
             ReminderSettingsChanged?.Invoke();
+        }
+    }
+
+    /// <summary>Raised when "Clean up every day" was turned on or off.</summary>
+    public event Action? AutoCleanSettingsChanged;
+
+    /// <summary>Settings page: clean up every day while running in the notification area.</summary>
+    public bool AutoCleanDaily
+    {
+        get => !_sampleMode && _settings.AutoCleanDaily; // screenshots never show this PC's setting
+        set
+        {
+            if (_settings.AutoCleanDaily == value) return;
+            _settings.AutoCleanDaily = value;
+            _settings.LastAutoCleanUtc = null; // turned on: the first clean comes at the next check
+            _settings.Save();
+            OnPropertyChanged();
+            AutoCleanSettingsChanged?.Invoke();
         }
     }
 
@@ -605,6 +628,61 @@ public sealed class MainViewModel : ObservableObject
         await ScanAsync(keepMessage: true);
     }
 
+    /// <summary>
+    /// "Clean up every day": moves what the usual choices would, without showing the list first
+    /// (see <see cref="AutoClean"/>). Returns null when it did not run because a scan, clean or list was
+    /// in progress; the next hourly check tries again.
+    /// </summary>
+    public async Task<CleanOutcome?> AutoCleanAsync()
+    {
+        if (IsBusy || IsReviewing || _sampleMode) return null;
+        IsBusy = true;
+        var startedUtc = DateTime.UtcNow;
+        // It looks first, which takes an unknown while; then moving reports done/total as usual.
+        IsProgressIndeterminate = true;
+        TaskbarState = TaskbarItemProgressState.Indeterminate;
+        ReportProgress("autoClean.running", 0, 0);
+        var progress = new Progress<(int Done, int Total)>(p =>
+        {
+            IsProgressIndeterminate = false;
+            TaskbarState = TaskbarItemProgressState.Normal;
+            ReportProgress("clean.progress", p.Done, p.Total);
+        });
+        var excluded = _settings.ExcludedFolders.ToArray();
+        var paths = _paths;
+        CleanOutcome outcome;
+        try
+        {
+            // Like a clean by hand on an STA thread (the shell's Recycle Bin operation), at low priority:
+            // nobody is waiting for it.
+            outcome = await RunOnStaThread(() => AutoClean.Run(CategoryCatalog.Create(paths), new ShellRecycleBin(),
+                DateTime.UtcNow, excluded, progress: progress), ThreadPriority.BelowNormal);
+        }
+        finally
+        {
+            IsProgressIndeterminate = false;
+            TaskbarState = TaskbarItemProgressState.None;
+            IsBusy = false;
+        }
+
+        if (outcome.Moved.Count > 0)
+        {
+            _history.Add(new CleanRecord
+            {
+                StartedUtc = startedUtc,
+                FinishedUtc = DateTime.UtcNow,
+                Items = outcome.Moved.Select(i => new RecordedItem(i.Path, i.IsDirectory, i.Bytes)).ToList(),
+                Automatic = true,
+            });
+            RefreshHistory();
+            _settings.LastReminderUtc = DateTime.UtcNow; // just cleaned: the reminder waits a full week or month again
+            _settings.Save();
+            // The cards may still show what was just moved.
+            if (HasScanned && !IsFolderMode) await ScanAsync(keepMessage: true);
+        }
+        return outcome;
+    }
+
     /// <summary>Puts back what one clean moved, from the Recycle Bin to where it was.</summary>
     private async Task UndoAsync(CleanRecord record)
     {
@@ -669,7 +747,7 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(ProgressText));
     }
 
-    private static Task<T> RunOnStaThread<T>(Func<T> work)
+    private static Task<T> RunOnStaThread<T>(Func<T> work, ThreadPriority priority = ThreadPriority.Normal)
     {
         var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
@@ -679,6 +757,7 @@ public sealed class MainViewModel : ObservableObject
         });
         thread.SetApartmentState(ApartmentState.STA);
         thread.IsBackground = true;
+        thread.Priority = priority;
         thread.Start();
         return tcs.Task;
     }

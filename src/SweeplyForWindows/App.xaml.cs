@@ -24,7 +24,9 @@ public partial class App : Application
     private TrayIcon? _tray;
     private MonitorController? _monitor;
     private ReminderController? _reminder;
+    private AutoCleanController? _autoClean;
     private bool _reminderPending; // the last notification was a reminder
+    private bool _autoCleanPending; // the last notification said what an automatic clean moved
     private bool _exiting;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -104,6 +106,12 @@ public partial class App : Application
         _tray.NotificationClicked += () =>
         {
             ShowMainWindow();
+            if (_autoCleanPending)
+            {
+                _autoCleanPending = false;
+                _viewModel.PageIndex = MainViewModel.SettingsPage; // the history, where it can be undone
+                return;
+            }
             if (!_reminderPending) return;
             _reminderPending = false;
             _viewModel.PageIndex = 0;
@@ -120,9 +128,22 @@ public partial class App : Application
         _monitor.Apply();
 
         _reminder = new ReminderController(_settings, _tray, KnownPaths.FromSystem());
-        _reminder.Shown += () => _reminderPending = true;
+        _reminder.Shown += () =>
+        {
+            _reminderPending = true;
+            _autoCleanPending = false; // the newest notification decides what a click shows
+        };
         _viewModel.ReminderSettingsChanged += _reminder.Apply;
         _reminder.Apply();
+
+        _autoClean = new AutoCleanController(_settings, _tray, _viewModel);
+        _autoClean.Shown += () =>
+        {
+            _autoCleanPending = true;
+            _reminderPending = false;
+        };
+        _viewModel.AutoCleanSettingsChanged += _autoClean.Apply;
+        _autoClean.Apply();
         _tray.Show();
 
         instance.Listen(args => Dispatcher.BeginInvoke(() =>
@@ -178,6 +199,7 @@ public partial class App : Application
         if (!_settings.TrayHintShown)
         {
             _reminderPending = false; // this notification replaces any reminder
+            _autoCleanPending = false;
             _tray?.ShowNotification(Loc.Instance["tray.hint.title"], Loc.Instance["tray.hint.body"]);
             _settings.TrayHintShown = true;
             _settings.Save();
@@ -190,6 +212,7 @@ public partial class App : Application
         _exiting = true;
         _monitor?.Dispose();
         _reminder?.Dispose();
+        _autoClean?.Dispose();
         _tray?.Dispose();
         _instance?.Dispose();
         Shutdown(0);

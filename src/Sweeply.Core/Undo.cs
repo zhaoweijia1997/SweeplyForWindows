@@ -22,6 +22,10 @@ public sealed class CleanRecord
     public DateTime StartedUtc { get; init; }
     public DateTime FinishedUtc { get; init; }
     public List<RecordedItem> Items { get; init; } = new();
+
+    /// <summary>Done by "Clean up every day" rather than by hand (older history files: false).</summary>
+    public bool Automatic { get; init; }
+
     public UndoState State { get; set; }
     public int RestoredCount { get; set; }
     public int NotRestoredCount { get; set; }

@@ -87,7 +87,8 @@ On Windows 11 the entry is under **Show more options**.
 </p>
 
 - **Nothing is moved without you.** Sweeply only scans. Before anything moves, you see the full list
-  of what would go, can untick any item or save the list, and then confirm.
+  of what would go, can untick any item or save the list, and then confirm. The one exception is
+  Clean up every day, if you turn it on (see below).
 - **Everything goes to the Recycle Bin**, so you can restore it. If something is too big for the
   Recycle Bin, Windows asks you first instead of deleting it for good.
 - **Undo.** The last 5 cleans can be undone: what was moved goes back where it was, as long as it
@@ -110,9 +111,14 @@ On Windows 11 the entry is under **Show more options**.
 - **Stays in the notification area.** Closing the window keeps it there; right-click the icon to exit.
   You can turn this off in Settings.
 - **Start with Windows** (off by default): starts as an icon only when you sign in.
-  Nothing is scanned or cleaned until you ask.
+  Nothing is scanned or cleaned until you ask (or turn on Clean up every day).
 - **Clean-up reminder** (off by default): every week or month it looks — only reads — and shows a
   notification when at least 1 GB can be cleaned. Cleaning by hand starts the wait again.
+- **Clean up every day** (off by default): once a day it moves what is ticked by default to the
+  Recycle Bin, except package caches and graphics shader caches, which would only be downloaded or
+  built again. Open apps and the "Never clean" list are skipped as always, and anything the Recycle
+  Bin can't take is left alone. No list is shown first: a notification says what was moved, and it
+  can be undone like any other clean.
 - **Activity monitor**, every part optional:
   - a live number on the icon: CPU usage, download or upload speed, or disk writes;
   - download and upload speed, CPU usage and disk writes when you point at the icon;

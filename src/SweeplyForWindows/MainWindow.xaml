@@ -447,6 +447,15 @@
                                           SelectedValuePath="Value" SelectedValue="{Binding SelectedReminder}"/>
                             </Grid>
                         </Border>
+                        <Border Style="{StaticResource Card}">
+                            <CheckBox IsChecked="{Binding AutoCleanDaily}" VerticalContentAlignment="Top">
+                                <StackPanel Margin="4,0,0,0">
+                                    <TextBlock Text="{Binding [settings.autoClean], Source={x:Static loc:Loc.Instance}}" FontWeight="SemiBold" FontSize="14"/>
+                                    <TextBlock Style="{StaticResource Secondary}" Margin="0,3,0,0"
+                                               Text="{Binding [settings.autoClean.desc], Source={x:Static loc:Loc.Instance}}"/>
+                                </StackPanel>
+                            </CheckBox>
+                        </Border>
 
                         <TextBlock Text="{Binding [settings.section.explorer], Source={x:Static loc:Loc.Instance}}"
                                    FontWeight="SemiBold" FontSize="14" Margin="2,22,0,8"/>

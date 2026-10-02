@@ -15,7 +15,7 @@ public sealed class HistoryRowViewModel
 
     public CleanRecord Record { get; }
 
-    public string Text => Loc.Instance.Format("history.item",
+    public string Text => Loc.Instance.Format(Record.Automatic ? "history.itemAuto" : "history.item",
         Record.StartedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", Loc.Instance.Culture),
         Record.Items.Count, SizeFormatter.Format(Record.Bytes, Loc.Instance.Culture));
 

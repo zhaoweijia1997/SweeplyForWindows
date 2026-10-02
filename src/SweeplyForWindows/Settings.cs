@@ -38,6 +38,12 @@ public sealed class Settings
     /// <summary>The last look for the reminder, or the last clean; the wait counts from here.</summary>
     public DateTime? LastReminderUtc { get; set; }
 
+    /// <summary>"Clean up every day" while running in the notification area. Off unless turned on.</summary>
+    public bool AutoCleanDaily { get; set; }
+
+    /// <summary>The last automatic clean; null right after it was turned on (the first one comes soon).</summary>
+    public DateTime? LastAutoCleanUtc { get; set; }
+
     /// <summary>Where the floating bar was last dragged to (device-independent pixels).</summary>
     public double? MonitorBarLeft { get; set; }
     public double? MonitorBarTop { get; set; }
