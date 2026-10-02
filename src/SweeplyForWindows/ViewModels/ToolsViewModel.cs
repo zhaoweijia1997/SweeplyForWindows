@@ -297,20 +297,203 @@ public sealed class TraceToolViewModel : ObservableObject
     }
 }
 
-/// <summary>The Monitor page's Tools tab: ping and trace route (and the network scan to come).</summary>
+/// <summary>A network adapter that can be scanned, as the list shows it: "Wi-Fi · 192.0.2.23/24".</summary>
+public sealed record ScanChoice(NetworkAdapter Adapter, IPAddress Address, int PrefixLength)
+{
+    public string Text => $"{Adapter.Name} · {Address}/{PrefixLength}";
+}
+
+/// <summary>One device found by the network scan.</summary>
+public sealed record LanDeviceRow(string Address, string Name, string Mac, string TimeText, string Note);
+
+/// <summary>The network scan on the Tools tab: the devices on one adapter's network.</summary>
+public sealed class LanScanViewModel : ObservableObject
+{
+    private CancellationTokenSource? _run;
+    private ScanChoice? _selected;
+    private string _statusText = "", _progressText = "";
+    private double _progress;
+    private bool _isRunning;
+    private IReadOnlyList<LanDevice> _found = Array.Empty<LanDevice>();
+    private TimeSpan _took;
+
+    public LanScanViewModel()
+    {
+        StartStopCommand = new RelayCommand(_ => { if (IsRunning) Stop(); else _ = RunAsync(); }, () => IsRunning || Selected is not null);
+        CopyCommand = new RelayCommand(_ => Copy(), () => Devices.Count > 0);
+    }
+
+    public ObservableCollection<ScanChoice> Choices { get; } = new();
+
+    public ScanChoice? Selected
+    {
+        get => _selected;
+        set
+        {
+            if (!SetField(ref _selected, value)) return;
+            OnPropertyChanged(nameof(RangeText));
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    /// <summary>"Scans 192.0.2.1 to 192.0.2.254 (254 addresses)." and, for big networks, that only part is scanned.</summary>
+    public string RangeText
+    {
+        get
+        {
+            if (Selected is not { } s) return "";
+            var range = LanScanner.Range(s.Address, s.PrefixLength);
+            if (range.Count == 0) return Loc.Instance["tools.scan.nothing"];
+            string text = Loc.Instance.Format("tools.scan.range", range.FirstAddress, range.LastAddress, range.Count);
+            return range.Trimmed ? text + " " + Loc.Instance["tools.scan.trimmed"] : text;
+        }
+    }
+
+    public ObservableCollection<LanDeviceRow> Devices { get; } = new();
+    public string StatusText { get => _statusText; private set => SetField(ref _statusText, value); }
+    public string ProgressText { get => _progressText; private set => SetField(ref _progressText, value); }
+    public double Progress { get => _progress; private set => SetField(ref _progress, value); }
+    public bool HasDevices => Devices.Count > 0;
+
+    public bool IsRunning
+    {
+        get => _isRunning;
+        private set
+        {
+            if (!SetField(ref _isRunning, value)) return;
+            OnPropertyChanged(nameof(CanEdit));
+            OnPropertyChanged(nameof(ButtonText));
+        }
+    }
+
+    public bool CanEdit => !IsRunning;
+    public string ButtonText => Loc.Instance[IsRunning ? "tools.stop" : "tools.scan.start"];
+    public ICommand StartStopCommand { get; }
+    public ICommand CopyCommand { get; }
+
+    /// <summary>Connected adapters with an IPv4 address; real cards first.</summary>
+    public void SetAdapters(IReadOnlyList<NetworkAdapter> adapters)
+    {
+        string? previous = Selected?.Adapter.Id;
+        Choices.Clear();
+        foreach (var a in adapters.Where(a => a.IsUp && a.InterfaceIndex > 0))
+            foreach (var (address, prefix) in a.IPv4.Where(v => !IPAddress.IsLoopback(v.Address) && v.PrefixLength is > 0 and < 31))
+                Choices.Add(new ScanChoice(a, address, prefix));
+        Selected = Choices.FirstOrDefault(c => c.Adapter.Id == previous) ?? Choices.FirstOrDefault();
+        if (Choices.Count == 0) StatusText = Loc.Instance["tools.scan.none"];
+    }
+
+    public void Stop()
+    {
+        _run?.Cancel();
+        _run = null;
+    }
+
+    public void Relocalize()
+    {
+        OnPropertyChanged(nameof(ButtonText));
+        OnPropertyChanged(nameof(RangeText));
+        Show();
+    }
+
+    private async Task RunAsync()
+    {
+        if (Selected is not { } choice) return;
+        var cancel = new CancellationTokenSource();
+        _run = cancel;
+        IsRunning = true;
+        Devices.Clear();
+        OnPropertyChanged(nameof(HasDevices));
+        StatusText = "";
+        Progress = 0;
+        var started = DateTime.UtcNow;
+        var progress = new Progress<(int Done, int Total)>(p =>
+        {
+            if (cancel.IsCancellationRequested) return;
+            Progress = p.Total == 0 ? 1 : (double)p.Done / p.Total;
+            ProgressText = Loc.Instance.Format("tools.scan.progress", p.Done, p.Total);
+        });
+        try
+        {
+            _found = await LanScanner.ScanAsync(choice.Address, choice.PrefixLength, choice.Adapter.InterfaceIndex, choice.Adapter.MacAddress,
+                choice.Adapter.Gateways, progress, cancel.Token);
+            _took = DateTime.UtcNow - started;
+            Show();
+        }
+        catch (OperationCanceledException) { StatusText = Loc.Instance["tools.stopped"]; }
+        finally
+        {
+            if (_run == cancel) _run = null;
+            IsRunning = false;
+            ProgressText = "";
+        }
+    }
+
+    private void Show()
+    {
+        if (_found.Count == 0) return;
+        var loc = Loc.Instance;
+        var culture = loc.Culture;
+        Devices.Clear();
+        foreach (var d in _found)
+        {
+            var notes = new List<string>();
+            if (d.IsSelf) notes.Add(loc["tools.scan.self"]);
+            if (d.IsGateway) notes.Add(loc["tools.scan.gateway"]);
+            if (d.RandomMac) notes.Add(loc["tools.scan.random"]);
+            string time = d.IsSelf ? "" : d.PingMs is long ms ? EchoText.Milliseconds(ms, culture) : loc["tools.scan.noPing"];
+            Devices.Add(new LanDeviceRow(d.Address.ToString(), d.Name, d.Mac, time, string.Join(loc["hw.listSeparator"], notes)));
+        }
+        StatusText = loc.Format("tools.scan.summary", _found.Count, Math.Max(1, (int)Math.Round(_took.TotalSeconds)));
+        OnPropertyChanged(nameof(HasDevices));
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private void Copy()
+    {
+        var lines = Devices.Select(d => string.Join("\t", new[] { d.Address, d.Name, d.Mac, d.TimeText, d.Note }));
+        try { System.Windows.Clipboard.SetText(string.Join(Environment.NewLine, lines)); }
+        catch (System.Runtime.InteropServices.ExternalException) { } // the clipboard is busy
+    }
+
+    /// <summary>Made-up devices for screenshots: documentation addresses and MACs (RFC 5737, RFC 7042).</summary>
+    public void LoadSample()
+    {
+        var wifi = new NetworkAdapter
+        {
+            Id = "wifi", Name = "Wi-Fi", IsUp = true, IsHardware = true, InterfaceIndex = 12, MacAddress = "00-00-5E-00-53-2A",
+            IPv4 = new[] { (IPAddress.Parse("192.0.2.23"), 24) }, Gateways = new[] { IPAddress.Parse("192.0.2.1") },
+        };
+        SetAdapters(new[] { wifi });
+        _found = new[]
+        {
+            new LanDevice { Address = IPAddress.Parse("192.0.2.1"), Mac = "00-00-5E-00-53-01", PingMs = 2, Name = "router.home.example", IsGateway = true },
+            new LanDevice { Address = IPAddress.Parse("192.0.2.23"), Mac = "00-00-5E-00-53-2A", Name = "ALEX-LAPTOP", IsSelf = true },
+            new LanDevice { Address = IPAddress.Parse("192.0.2.31"), Mac = "00-00-5E-00-53-31", PingMs = 4, Name = "OFFICE-PRINTER" },
+            new LanDevice { Address = IPAddress.Parse("192.0.2.47"), Mac = "02-00-5E-00-53-47", PingMs = 38 },
+            new LanDevice { Address = IPAddress.Parse("192.0.2.58"), Mac = "00-00-5E-00-53-58", Name = "nas.home.example" },
+            new LanDevice { Address = IPAddress.Parse("192.0.2.64"), Mac = "02-00-5E-00-53-64", PingMs = 61 },
+        };
+        _took = TimeSpan.FromSeconds(6);
+        Show();
+    }
+}
+
+/// <summary>The Monitor page's Tools tab: ping, trace route and the network scan.</summary>
 public sealed class ToolsViewModel : ObservableObject
 {
     private bool _suggested;
 
     public PingToolViewModel Ping { get; } = new();
     public TraceToolViewModel Trace { get; } = new();
+    public LanScanViewModel Scan { get; } = new();
 
-    /// <summary>The tab came into view: offer the router as the first thing to ping.</summary>
+    /// <summary>The tab came into view: offer the router as the first thing to ping, and list the adapters to scan.</summary>
     public void SetShown(bool shown)
     {
-        if (!shown || _suggested) return;
+        if (!shown) return;
+        _ = LoadAdaptersAsync(suggest: !_suggested);
         _suggested = true;
-        _ = SuggestGatewayAsync();
     }
 
     /// <summary>The page went out of view (another page, window closed or minimized): stop sending.</summary>
@@ -318,24 +501,28 @@ public sealed class ToolsViewModel : ObservableObject
     {
         Ping.Stop();
         Trace.Stop();
+        Scan.Stop();
     }
 
     public void Relocalize()
     {
         Ping.Relocalize();
         Trace.Relocalize();
+        Scan.Relocalize();
     }
 
-    private async Task SuggestGatewayAsync()
+    private async Task LoadAdaptersAsync(bool suggest)
     {
         try
         {
             var adapters = await Task.Run(NetworkAdapters.Read);
+            if (!Scan.IsRunning) Scan.SetAdapters(adapters);
+            if (!suggest) return;
             var gateway = adapters.Where(a => a.IsUp && a.IsHardware).SelectMany(a => a.Gateways)
                 .FirstOrDefault(g => g.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
             if (gateway is not null && Ping.Target.Length == 0) Ping.Target = gateway.ToString();
         }
-        catch (Exception) { } // a suggestion only
+        catch (Exception) { } // suggestions only
     }
 
     public void LoadSample(DateTime now)
@@ -343,5 +530,6 @@ public sealed class ToolsViewModel : ObservableObject
         _suggested = true;
         Ping.LoadSample(now);
         Trace.LoadSample();
+        Scan.LoadSample();
     }
 }

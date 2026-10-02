@@ -1026,6 +1026,62 @@
                                                 </ItemsControl>
                                             </StackPanel>
                                         </Border>
+                                        <!-- Network scan: the devices on one adapter's network -->
+                                        <Border Style="{StaticResource Card}" Margin="0,4,0,4">
+                                            <StackPanel DataContext="{Binding Scan}">
+                                                <DockPanel>
+                                                    <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Command="{Binding CopyCommand}" VerticalAlignment="Center"
+                                                            Visibility="{Binding HasDevices, Converter={StaticResource TrueVisibility}}">
+                                                        <TextBlock Text="{Binding [tools.scan.copy], Source={x:Static loc:Loc.Instance}}"/>
+                                                    </Button>
+                                                    <TextBlock Text="{Binding [tools.scan.title], Source={x:Static loc:Loc.Instance}}" FontWeight="SemiBold" FontSize="14"/>
+                                                </DockPanel>
+                                                <TextBlock Style="{StaticResource Secondary}" Margin="0,2,0,0" Text="{Binding [tools.scan.desc], Source={x:Static loc:Loc.Instance}}"/>
+                                                <Grid Margin="0,10,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding Selected}" DisplayMemberPath="Text"
+                                                              IsEnabled="{Binding CanEdit}" HorizontalAlignment="Stretch"
+                                                              AutomationProperties.Name="{Binding [tools.scan.title], Source={x:Static loc:Loc.Instance}}"/>
+                                                    <Button Grid.Column="1" Style="{DynamicResource AccentButtonStyle}" MinWidth="96" Padding="16,6" Margin="8,0,0,0"
+                                                            Command="{Binding StartStopCommand}" Content="{Binding ButtonText}"/>
+                                                </Grid>
+                                                <TextBlock Style="{StaticResource Secondary}" FontSize="12" Margin="2,6,0,0" Text="{Binding RangeText}" TextWrapping="Wrap"/>
+                                                <StackPanel Orientation="Horizontal" Margin="2,8,0,0" Visibility="{Binding IsRunning, Converter={StaticResource TrueVisibility}}">
+                                                    <ProgressBar Width="240" Minimum="0" Maximum="1" Value="{Binding Progress, Mode=OneWay}" VerticalAlignment="Center"/>
+                                                    <TextBlock Style="{StaticResource Secondary}" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center" Text="{Binding ProgressText}"/>
+                                                </StackPanel>
+                                                <TextBlock FontWeight="SemiBold" Margin="2,8,0,0" Text="{Binding StatusText}" TextWrapping="Wrap"
+                                                           Visibility="{Binding StatusText, Converter={StaticResource TextVisibility}}"/>
+                                                <ItemsControl ItemsSource="{Binding Devices}" Margin="2,8,0,0">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid Margin="0,3">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="130"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="160"/>
+                                                                    <ColumnDefinition Width="80"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="{Binding Address}" FontFamily="Cascadia Mono, Consolas" VerticalAlignment="Center"/>
+                                                                <StackPanel Grid.Column="1" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"
+                                                                               Visibility="{Binding Name, Converter={StaticResource TextVisibility}}"/>
+                                                                    <TextBlock Style="{StaticResource Secondary}" FontSize="12" Text="{Binding Note}" TextWrapping="NoWrap"
+                                                                               TextTrimming="CharacterEllipsis" Visibility="{Binding Note, Converter={StaticResource TextVisibility}}"/>
+                                                                </StackPanel>
+                                                                <TextBlock Grid.Column="2" Style="{StaticResource Secondary}" Text="{Binding Mac}" FontFamily="Cascadia Mono, Consolas"
+                                                                           VerticalAlignment="Center"/>
+                                                                <TextBlock Grid.Column="3" Text="{Binding TimeText}" TextAlignment="Right" VerticalAlignment="Center"
+                                                                           Typography.NumeralAlignment="Tabular"/>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
                                         <TextBlock Style="{StaticResource Secondary}" FontSize="12" Margin="2,6,0,0"
                                                    Text="{Binding [tools.note], Source={x:Static loc:Loc.Instance}}"/>
                                     </StackPanel>

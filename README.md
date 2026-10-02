@@ -4,7 +4,7 @@
 
 <p align="center">
   A small, honest junk cleaner for Windows.<br>
-  Open source · Offline · No ads · No accounts
+  Open source · No ads · No accounts · No tracking
 </p>
 
 <p align="center">
@@ -24,7 +24,8 @@ shows you exactly what they are, and never deletes anything until you choose to.
 </p>
 
 > **Status: preview (0.3).** Cleaning, undo, the "Never clean" list, the folder right-click menu,
-> clean-up reminders, Clean up every day, Disk space, background mode and the activity monitor all work.
+> clean-up reminders, Clean up every day, Disk space, the Monitor page, background mode and the
+> activity monitor all work.
 
 ## What it finds
 
@@ -100,6 +101,35 @@ and undo apply as for a clean. Windows, installed programs and app data can't be
 nor any folder that holds them, nor hidden system files such as pagefile.sys. Desktop, Documents,
 Downloads and the other personal folders stay, though what is inside them can go.
 
+## Watch what your PC is doing
+
+<p align="center">
+  <img src="docs/screenshots/monitor-en-light.png" width="760" alt="The Monitor page: CPU, memory, disk, network, GPU and temperature, each with a chart of the last 2 minutes">
+</p>
+
+**Monitor** in the sidebar has four parts:
+
+- **Performance:** CPU (with its speed right now), memory, disk reads and writes, download and upload,
+  GPU and the hottest temperature, each with a chart of the last 2 minutes.
+- **Hardware:** the temperature of every drive and graphics card that reports one; the health NVMe
+  drives keep about themselves (life used, written in total, hours powered on, unsafe shutdowns, media
+  errors); and what the PC is made of — model, processor with its performance and efficient cores,
+  memory modules, graphics cards, drives. **Copy** puts it on the clipboard.
+- **Network:** every adapter with its addresses (IPv4 and IPv6, gateway, DNS, MAC, DHCP) and, for
+  Wi-Fi, the network, signal, band, channel and standard. Click a value to copy it.
+- **Tools:** ping, trace route, and a scan of the local network that lists the devices on it (one
+  ping per address plus Windows' own address lookup, so devices that ignore pings show up too; no
+  ports are tried).
+
+<p align="center">
+  <img src="docs/screenshots/monitor-hardware-en-light.png" width="760" alt="The Hardware part: temperatures, drive health and configuration">
+</p>
+
+Everything is read without administrator rights or a driver, and only while the page is open. The
+processor's temperature needs a kernel driver, so it isn't shown. Nothing is saved, and the tools send
+packets only when you start them, only to the addresses you choose. They also say when a proxy in TUN
+mode on this PC is answering in place of the real network.
+
 ## Safety first
 
 <p align="center">
@@ -120,7 +150,8 @@ Downloads and the other personal folders stay, though what is inside them can go
   its app not running. Items that must be old enough (temporary files, old chat pictures) still have to be.
 - **Only this PC's own disks.** USB sticks and network drives are never touched.
 - **Apps are left alone while they're open** (browsers, WeChat), and files in use are skipped.
-- **Works offline.** No network requests, no analytics, no accounts.
+- **Never goes online by itself.** No analytics, no accounts. Ping, trace route and the network scan
+  send packets only when you start them.
 
 ## Runs quietly in the background
 

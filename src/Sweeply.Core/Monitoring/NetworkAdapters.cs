@@ -33,6 +33,9 @@ public sealed record NetworkAdapter
 
     /// <summary>A real network card (Wi-Fi, Ethernet port), not a virtual adapter (VMware, VPN tunnel, Bluetooth, Wi-Fi Direct).</summary>
     public bool IsHardware { get; init; }
+
+    /// <summary>The index of its IP stack, which Windows' neighbour table refers to.</summary>
+    public int InterfaceIndex { get; init; }
     public long SpeedBitsPerSecond { get; init; }
     public string MacAddress { get; init; } = "";
     public IReadOnlyList<(IPAddress Address, int PrefixLength)> IPv4 { get; init; } = Array.Empty<(IPAddress, int)>();
@@ -96,6 +99,7 @@ public static class NetworkAdapters
             IsWifi = nic.NetworkInterfaceType == NetworkInterfaceType.Wireless80211,
             IsUp = nic.OperationalStatus == OperationalStatus.Up,
             IsHardware = index > 0 && IsHardwareInterface(index),
+            InterfaceIndex = index,
             SpeedBitsPerSecond = nic.Speed > 0 ? nic.Speed : 0,
             MacAddress = FormatMac(nic.GetPhysicalAddress().GetAddressBytes()),
             IPv4 = unicast.Where(u => u.Address.AddressFamily == AddressFamily.InterNetwork)
