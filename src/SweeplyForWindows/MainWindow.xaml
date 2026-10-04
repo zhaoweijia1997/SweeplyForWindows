@@ -4,6 +4,7 @@
         xmlns:local="clr-namespace:SweeplyForWindows"
         xmlns:loc="clr-namespace:SweeplyForWindows.Localization"
         xmlns:mon="clr-namespace:SweeplyForWindows.Monitor"
+        xmlns:cap="clr-namespace:SweeplyForWindows.Capture"
         Title="SweeplyForWindows" Width="1000" Height="720" MinWidth="780" MinHeight="520"
         Icon="Assets/app.ico"
         WindowStartupLocation="CenterScreen">
@@ -333,6 +334,12 @@
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Style="{StaticResource NavGlyph}" Text="&#xE9D9;"/>
                         <TextBlock Text="{Binding [nav.monitor], Source={x:Static loc:Loc.Instance}}" Margin="14,0,0,0"/>
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem Padding="10,9">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource NavGlyph}" Text="&#xE8CB;"/>
+                        <TextBlock Text="{Binding [nav.capture], Source={x:Static loc:Loc.Instance}}" Margin="14,0,0,0"/>
                     </StackPanel>
                 </ListBoxItem>
                 <ListBoxItem Padding="10,9">
@@ -774,6 +781,7 @@
                             <ListBoxItem Content="{Binding [monitor.tab.hardware], Source={x:Static loc:Loc.Instance}}"/>
                             <ListBoxItem Content="{Binding [monitor.tab.network], Source={x:Static loc:Loc.Instance}}"/>
                             <ListBoxItem Content="{Binding [monitor.tab.tools], Source={x:Static loc:Loc.Instance}}"/>
+                            <ListBoxItem Content="{Binding [monitor.tab.connections], Source={x:Static loc:Loc.Instance}}"/>
                         </ListBox>
                         <Grid Grid.Row="2" Margin="32,0,32,12">
                             <Grid Visibility="{Binding TabIndex, Converter={StaticResource PageVisibility}, ConverterParameter=0}">
@@ -1087,13 +1095,336 @@
                                     </StackPanel>
                                 </ScrollViewer>
                             </Grid>
+
+                            <!-- Connections: which program talks to where (like TCPView) -->
+                            <Grid Visibility="{Binding TabIndex, Converter={StaticResource PageVisibility}, ConverterParameter=4}">
+                                <DockPanel DataContext="{Binding Connections}" Margin="0,12,0,0">
+                                    <StackPanel DockPanel.Dock="Top">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox x:Name="ConnectionFilter" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged, Delay=200}" VerticalContentAlignment="Center"
+                                                     AutomationProperties.Name="{Binding [conn.filterHint], Source={x:Static loc:Loc.Instance}}"/>
+                                            <TextBlock Style="{StaticResource Secondary}" Margin="12,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                                                       Text="{Binding [conn.filterHint], Source={x:Static loc:Loc.Instance}}"
+                                                       Visibility="{Binding Text, ElementName=ConnectionFilter, Converter={StaticResource TextVisibility}, ConverterParameter=invert}"/>
+                                            <Button Grid.Column="1" Padding="14,6" Margin="8,0,0,0" Command="{Binding ClearFilterCommand}"
+                                                    Visibility="{Binding HasFilter, Converter={StaticResource TrueVisibility}}"
+                                                    Content="{Binding [conn.clearFilter], Source={x:Static loc:Loc.Instance}}"/>
+                                        </Grid>
+                                        <WrapPanel Margin="0,8,0,0">
+                                            <CheckBox IsChecked="{Binding HideLoopback}" Margin="0,0,20,0" Content="{Binding [conn.hideLoopback], Source={x:Static loc:Loc.Instance}}"/>
+                                            <CheckBox IsChecked="{Binding ShowAll}" Margin="0,0,20,0" Content="{Binding [conn.showAll], Source={x:Static loc:Loc.Instance}}"/>
+                                            <CheckBox IsChecked="{Binding LookUpNames}" Content="{Binding [conn.lookUpNames], Source={x:Static loc:Loc.Instance}}"/>
+                                        </WrapPanel>
+                                        <TextBlock Style="{StaticResource Secondary}" FontSize="12" Margin="2,8,0,6" Text="{Binding SummaryText}"/>
+                                        <!-- Column headings; click one to sort by it -->
+                                        <Grid Margin="8,0,16,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" MinWidth="150"/>
+                                                <ColumnDefinition Width="64"/>
+                                                <ColumnDefinition Width="176"/>
+                                                <ColumnDefinition Width="220"/>
+                                                <ColumnDefinition Width="124"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Button Style="{StaticResource LinkButton}" Command="{Binding SortCommand}" CommandParameter="Program" HorizontalAlignment="Left">
+                                                <TextBlock Text="{Binding [conn.col.program], Source={x:Static loc:Loc.Instance}}" FontSize="12" FontWeight="SemiBold"/>
+                                            </Button>
+                                            <TextBlock Grid.Column="1" Style="{StaticResource Secondary}" FontSize="12" FontWeight="SemiBold" Text="{Binding [conn.col.protocol], Source={x:Static loc:Loc.Instance}}"/>
+                                            <Button Grid.Column="2" Style="{StaticResource LinkButton}" Command="{Binding SortCommand}" CommandParameter="Local" HorizontalAlignment="Left">
+                                                <TextBlock Text="{Binding [conn.col.local], Source={x:Static loc:Loc.Instance}}" FontSize="12" FontWeight="SemiBold"/>
+                                            </Button>
+                                            <Button Grid.Column="3" Style="{StaticResource LinkButton}" Command="{Binding SortCommand}" CommandParameter="Remote" HorizontalAlignment="Left">
+                                                <TextBlock Text="{Binding [conn.col.remote], Source={x:Static loc:Loc.Instance}}" FontSize="12" FontWeight="SemiBold"/>
+                                            </Button>
+                                            <Button Grid.Column="4" Style="{StaticResource LinkButton}" Command="{Binding SortCommand}" CommandParameter="State" HorizontalAlignment="Left">
+                                                <TextBlock Text="{Binding [conn.col.state], Source={x:Static loc:Loc.Instance}}" FontSize="12" FontWeight="SemiBold"/>
+                                            </Button>
+                                        </Grid>
+                                    </StackPanel>
+                                    <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Secondary}" FontSize="12" Margin="2,8,0,0"
+                                               Text="{Binding [conn.note], Source={x:Static loc:Loc.Instance}}"/>
+                                    <ItemsControl Style="{StaticResource VirtualList}" ItemsSource="{Binding Rows}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border CornerRadius="4" Padding="8,3" Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=ItemsControl}}">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="Transparent"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Status}" Value="New">
+                                                                    <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBackgroundBrush}"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Status}" Value="Closed">
+                                                                    <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <Border.ContextMenu>
+                                                        <ContextMenu>
+                                                            <MenuItem Header="{Binding [conn.copy], Source={x:Static loc:Loc.Instance}}"
+                                                                      Command="{Binding PlacementTarget.Tag.CopyCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                                            <MenuItem Header="{Binding [conn.copyRemote], Source={x:Static loc:Loc.Instance}}"
+                                                                      Command="{Binding PlacementTarget.Tag.CopyRemoteCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                                            <MenuItem Header="{Binding [conn.reveal], Source={x:Static loc:Loc.Instance}}"
+                                                                      Command="{Binding PlacementTarget.Tag.RevealCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                                        </ContextMenu>
+                                                    </Border.ContextMenu>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" MinWidth="150"/>
+                                                            <ColumnDefinition Width="64"/>
+                                                            <ColumnDefinition Width="176"/>
+                                                            <ColumnDefinition Width="220"/>
+                                                            <ColumnDefinition Width="124"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Orientation="Horizontal" ToolTip="{Binding ProgramTip}" Margin="0,0,8,0">
+                                                            <Image Source="{Binding Icon}" Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                            <StackPanel VerticalAlignment="Center">
+                                                                <Button Style="{StaticResource LinkButton}" HorizontalAlignment="Left"
+                                                                        Command="{Binding DataContext.FilterProgramCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                        CommandParameter="{Binding ProgramName}">
+                                                                    <TextBlock Text="{Binding ProgramName}" TextTrimming="CharacterEllipsis"/>
+                                                                </Button>
+                                                                <TextBlock Style="{StaticResource Secondary}" FontSize="11" Text="{Binding ServicesText}" TextWrapping="NoWrap"
+                                                                           TextTrimming="CharacterEllipsis" Visibility="{Binding ServicesText, Converter={StaticResource TextVisibility}}"/>
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                        <TextBlock Grid.Column="1" Style="{StaticResource Secondary}" Text="{Binding ProtocolText}" VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding LocalText}" FontFamily="Cascadia Mono, Consolas" FontSize="12.5"
+                                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding LocalText}"/>
+                                                        <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="0,0,8,0">
+                                                            <TextBlock Text="{Binding RemoteText}" FontFamily="Cascadia Mono, Consolas" FontSize="12.5" TextTrimming="CharacterEllipsis"
+                                                                       ToolTip="{Binding RemoteText}"/>
+                                                            <TextBlock Style="{StaticResource Secondary}" FontSize="11" Text="{Binding RemoteNote}" TextWrapping="NoWrap"
+                                                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding RemoteNote}"
+                                                                       Visibility="{Binding RemoteNote, Converter={StaticResource TextVisibility}}"/>
+                                                        </StackPanel>
+                                                        <TextBlock Grid.Column="4" Text="{Binding StateText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </DockPanel>
+                            </Grid>
                         </Grid>
+                    </Grid>
+                </Grid>
+
+                <!-- ===== Capture: packets, as Wireshark shows them ===== -->
+                <Grid Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=3}">
+                    <Grid x:Name="CapturePage" DataContext="{Binding Capture}" AllowDrop="True" Background="Transparent">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="5*" MinHeight="80"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="4*" MinHeight="60"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="3*" MinHeight="60"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Margin="32,26,32,8">
+                            <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [cap.title], Source={x:Static loc:Loc.Instance}}"/>
+                            <TextBlock Style="{StaticResource Secondary}" Margin="0,6,0,0" Text="{Binding [cap.subtitle], Source={x:Static loc:Loc.Instance}}"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Margin="32,0,32,8">
+                            <DockPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Padding="14,6" Command="{Binding OpenCommand}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE8E5;" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding [cap.open], Source={x:Static loc:Loc.Instance}}" Margin="8,0,0,0"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Padding="14,6" Margin="8,0,0,0" Command="{Binding SaveCommand}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE74E;" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding [cap.save], Source={x:Static loc:Loc.Instance}}" Margin="8,0,0,0"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource Secondary}" Text="{Binding FileName}" Margin="16,0,0,0" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" HorizontalAlignment="Right"/>
+                            </DockPanel>
+                            <TextBlock FontSize="12" Margin="2,6,0,0" Text="{Binding Note}" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                       Visibility="{Binding Note, Converter={StaticResource TextVisibility}}"/>
+                        </StackPanel>
+
+                        <!-- Nothing open yet -->
+                        <Border Grid.Row="2" Grid.RowSpan="5" Margin="32,8,32,16" Style="{StaticResource Card}" VerticalAlignment="Top" Padding="20"
+                                Visibility="{Binding HasPackets, Converter={StaticResource FalseVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding [cap.empty.title], Source={x:Static loc:Loc.Instance}}" FontWeight="SemiBold" FontSize="14"/>
+                                <TextBlock Style="{StaticResource Secondary}" Margin="0,4,0,0" Text="{Binding [cap.empty.body], Source={x:Static loc:Loc.Instance}}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0" Visibility="{Binding IsLoading, Converter={StaticResource TrueVisibility}}">
+                                    <ProgressBar Width="200" IsIndeterminate="True" VerticalAlignment="Center"/>
+                                    <TextBlock Style="{StaticResource Secondary}" Margin="12,0,0,0" Text="{Binding StatusText}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- The packet list -->
+                        <ListView x:Name="PacketList" Grid.Row="2" Margin="32,0,32,0" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}"
+                                  VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                  VirtualizingPanel.ScrollUnit="Item" ScrollViewer.IsDeferredScrollingEnabled="False"
+                                  FontSize="12.5" Typography.NumeralAlignment="Tabular" SelectionMode="Single"
+                                  BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                                  Visibility="{Binding HasPackets, Converter={StaticResource TrueVisibility}}">
+                            <!-- This theme's list template has no column headers: the GridView one, with the theme's colours. -->
+                            <ListView.Template>
+                                <ControlTemplate TargetType="ListView">
+                                    <Border BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" CornerRadius="4">
+                                        <ScrollViewer Style="{DynamicResource {x:Static GridView.GridViewScrollViewerStyleKey}}" Focusable="False"
+                                                      CanContentScroll="True" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                                            <ItemsPresenter/>
+                                        </ScrollViewer>
+                                    </Border>
+                                </ControlTemplate>
+                            </ListView.Template>
+                            <ListView.Resources>
+                                <Style TargetType="GridViewColumnHeader" BasedOn="{StaticResource {x:Type GridViewColumnHeader}}">
+                                    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                                    <Setter Property="Padding" Value="6,4"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                    <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}"/>
+                                </Style>
+                            </ListView.Resources>
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="Background" Value="{Binding Background}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                    <!-- Cells in the GridView's columns (this theme's row template doesn't line them up). -->
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListViewItem">
+                                                <Border Background="{TemplateBinding Background}" MinHeight="22">
+                                                    <Grid>
+                                                        <Border x:Name="Mark" Background="{DynamicResource AccentFillColorDefaultBrush}" Opacity="0" />
+                                                        <Border x:Name="Edge" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}" BorderThickness="0" />
+                                                        <GridViewRowPresenter Columns="{TemplateBinding GridView.ColumnCollection}" Content="{TemplateBinding Content}"
+                                                                              VerticalAlignment="Center" Margin="0,1"/>
+                                                    </Grid>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Mark" Property="Opacity" Value="0.12"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsSelected" Value="True">
+                                                        <Setter TargetName="Mark" Property="Opacity" Value="0.35"/>
+                                                        <Setter TargetName="Edge" Property="BorderThickness" Value="0,1"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <!-- The menu opens outside the list's tree: the page's view model travels in Tag. -->
+                                    <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=ListView}}"/>
+                                    <Setter Property="ContextMenu">
+                                        <Setter.Value>
+                                            <ContextMenu>
+                                                <MenuItem Header="{Binding [cap.copyRow], Source={x:Static loc:Loc.Instance}}"
+                                                          Command="{Binding PlacementTarget.Tag.CopyRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                                <MenuItem Header="{Binding [cap.copyBytes], Source={x:Static loc:Loc.Instance}}"
+                                                          Command="{Binding PlacementTarget.Tag.CopyBytesCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                            </ContextMenu>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.View>
+                                <GridView AllowsColumnReorder="False">
+                                    <GridViewColumn Header="{Binding [cap.col.number], Source={x:Static loc:Loc.Instance}}" Width="64" DisplayMemberBinding="{Binding Number}"/>
+                                    <GridViewColumn Header="{Binding [cap.col.time], Source={x:Static loc:Loc.Instance}}" Width="92" DisplayMemberBinding="{Binding Time}"/>
+                                    <GridViewColumn Header="{Binding [cap.col.program], Source={x:Static loc:Loc.Instance}}" Width="110" DisplayMemberBinding="{Binding Program}"/>
+                                    <GridViewColumn Header="{Binding [cap.col.source], Source={x:Static loc:Loc.Instance}}" Width="140" DisplayMemberBinding="{Binding Source}"/>
+                                    <GridViewColumn Header="{Binding [cap.col.destination], Source={x:Static loc:Loc.Instance}}" Width="140" DisplayMemberBinding="{Binding Destination}"/>
+                                    <GridViewColumn Header="{Binding [cap.col.protocol], Source={x:Static loc:Loc.Instance}}" Width="84" DisplayMemberBinding="{Binding Protocol}"/>
+                                    <GridViewColumn Header="{Binding [cap.col.length], Source={x:Static loc:Loc.Instance}}" Width="62" DisplayMemberBinding="{Binding Length}"/>
+                                    <GridViewColumn Header="{Binding [cap.col.info], Source={x:Static loc:Loc.Instance}}" Width="640" DisplayMemberBinding="{Binding Info}"/>
+                                </GridView>
+                            </ListView.View>
+                        </ListView>
+
+                        <GridSplitter Grid.Row="3" Height="7" HorizontalAlignment="Stretch" Margin="32,0" Background="Transparent" ResizeBehavior="PreviousAndNext"
+                                      Visibility="{Binding HasPackets, Converter={StaticResource TrueVisibility}}"/>
+
+                        <!-- The selected packet's details -->
+                        <TreeView x:Name="PacketDetails" Grid.Row="4" Margin="32,0,32,0" ItemsSource="{Binding Details}" FontSize="12.5"
+                                  BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  Visibility="{Binding HasPackets, Converter={StaticResource TrueVisibility}}">
+                            <TreeView.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="{Binding [cap.copyNode], Source={x:Static loc:Loc.Instance}}" Command="{Binding CopyNodeCommand}"/>
+                                    <Separator/>
+                                    <MenuItem Header="{Binding [cap.expandAll], Source={x:Static loc:Loc.Instance}}" Command="{Binding ExpandAllCommand}"/>
+                                    <MenuItem Header="{Binding [cap.collapseAll], Source={x:Static loc:Loc.Instance}}" Command="{Binding CollapseAllCommand}"/>
+                                </ContextMenu>
+                            </TreeView.ContextMenu>
+                            <TreeView.ItemContainerStyle>
+                                <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                                    <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                                    <Setter Property="Padding" Value="2,1"/>
+                                    <Setter Property="MinHeight" Value="22"/>
+                                </Style>
+                            </TreeView.ItemContainerStyle>
+                            <TreeView.ItemTemplate>
+                                <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                                    <TextBlock Text="{Binding Text}" TextWrapping="NoWrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsWarning}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </HierarchicalDataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
+
+                        <GridSplitter Grid.Row="5" Height="7" HorizontalAlignment="Stretch" Margin="32,0" Background="Transparent" ResizeBehavior="PreviousAndNext"
+                                      Visibility="{Binding HasPackets, Converter={StaticResource TrueVisibility}}"/>
+
+                        <!-- The selected packet's bytes -->
+                        <Border Grid.Row="6" Margin="32,0,32,0" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="0,4"
+                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                Visibility="{Binding HasPackets, Converter={StaticResource TrueVisibility}}">
+                            <cap:HexView Bytes="{Binding Bytes}" HighlightStart="{Binding HighlightStart}" HighlightLength="{Binding HighlightLength}"
+                                         ByteClickedCommand="{Binding ByteClickedCommand}" HorizontalAlignment="Left"/>
+                        </Border>
+
+                        <!-- How many packets; the note on protocol names -->
+                        <Border Grid.Row="7" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0" Margin="0,10,0,0"
+                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" Padding="32,10">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Secondary}" FontSize="12" Margin="16,0,0,0" VerticalAlignment="Center"
+                                           Text="{Binding [cap.englishNote], Source={x:Static loc:Loc.Instance}}" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding StatusText}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            </DockPanel>
+                        </Border>
                     </Grid>
                 </Grid>
 
                 <!-- ===== Settings ===== -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,26,32,24"
-                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=3}">
+                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=4}">
                     <StackPanel MaxWidth="820" HorizontalAlignment="Left">
                         <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [settings.title], Source={x:Static loc:Loc.Instance}}"/>
 
@@ -1262,7 +1593,7 @@
 
                 <!-- ===== Support ===== -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,26,32,24"
-                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=4}">
+                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=5}">
                     <StackPanel MaxWidth="820" HorizontalAlignment="Left">
                         <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [support.title], Source={x:Static loc:Loc.Instance}}"/>
                         <TextBlock Margin="0,14,0,0" TextWrapping="Wrap" FontSize="14"
@@ -1303,7 +1634,7 @@
 
                 <!-- ===== About ===== -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,26,32,24"
-                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=5}">
+                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=6}">
                     <StackPanel MaxWidth="720" HorizontalAlignment="Left">
                         <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [about.title], Source={x:Static loc:Loc.Instance}}"/>
                         <Border Style="{StaticResource Card}" Margin="0,18,0,0" Padding="20">

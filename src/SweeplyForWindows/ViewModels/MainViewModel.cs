@@ -224,13 +224,23 @@ public sealed class MainViewModel : ObservableObject
     public Func<IntPtr>? OwnerHandle { get; set; }
 
     /// <summary>Page numbers, in the order of the navigation list.</summary>
-    public const int CleanPage = 0, SpacePage = 1, MonitorPage = 2, SettingsPage = 3, SupportPage = 4, AboutPage = 5;
+    public const int CleanPage = 0, SpacePage = 1, MonitorPage = 2, CapturePage = 3, SettingsPage = 4, SupportPage = 5, AboutPage = 6;
 
     /// <summary>The Space page: what takes up the space on a drive or in a folder.</summary>
     public SpaceViewModel Space { get; }
 
     /// <summary>The Monitor page: performance charts, and later hardware and network.</summary>
     public MonitorViewModel Monitor { get; } = new();
+
+    /// <summary>The Capture page: packets, as Wireshark shows them.</summary>
+    public CaptureViewModel Capture { get; } = new();
+
+    /// <summary>"--open-capture &lt;file&gt;" or a file dropped on the window: the Capture page with that file.</summary>
+    public void OpenCapture(string path)
+    {
+        PageIndex = CapturePage;
+        _ = Capture.OpenAsync(path);
+    }
 
     public int PageIndex
     {
@@ -858,6 +868,7 @@ public sealed class MainViewModel : ObservableObject
         RefreshHistory();
         Space.Relocalize();
         Monitor.Relocalize();
+        Capture.Relocalize();
         OnAllPropertiesChanged();
     }
 

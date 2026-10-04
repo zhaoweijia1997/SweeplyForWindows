@@ -95,9 +95,10 @@ public partial class App : Application
         FolderMenu.Refresh(Loc.Instance["menu.folder"]);
         string? folder = FolderJunk.FolderFromArgs(e.Args);
         string? spaceFolder = SpaceFolderFromArgs(e.Args);
+        string? captureFile = ValueAfter(e.Args, "--open-capture");
 
         _viewModel = new MainViewModel(KnownPaths.FromSystem(), _settings);
-        _window = new MainWindow(_viewModel, scanOnOpen: folder is null && spaceFolder is null);
+        _window = new MainWindow(_viewModel, scanOnOpen: folder is null && spaceFolder is null && captureFile is null);
         _window.Closing += OnWindowClosing;
         _window.Closed += (_, _) => ExitApp();
 
@@ -168,6 +169,7 @@ public partial class App : Application
             ShowMainWindow();
             if (FolderJunk.FolderFromArgs(args) is string chosen) _ = _viewModel!.OpenFolderAsync(chosen);
             else if (SpaceFolderFromArgs(args) is string space) _viewModel!.OpenSpace(space);
+            else if (ValueAfter(args, "--open-capture") is string file) _viewModel!.OpenCapture(file);
         }));
 
         if (folder is not null)
@@ -180,6 +182,11 @@ public partial class App : Application
             ShowMainWindow();
             _viewModel.OpenSpace(spaceFolder);
         }
+        else if (captureFile is not null)
+        {
+            ShowMainWindow();
+            _viewModel.OpenCapture(captureFile);
+        }
         else if (!e.Args.Contains(Autostart.BackgroundArg))
         {
             ShowMainWindow();
@@ -187,6 +194,15 @@ public partial class App : Application
     }
 
     /// <summary>"--space &lt;folder&gt;": open the Space page on that folder. Same quoting rules as the folder menu.</summary>
+    /// <summary>The argument after <paramref name="name"/> ("--open-capture file"), without stray quotes.</summary>
+    private static string? ValueAfter(IReadOnlyList<string> args, string name)
+    {
+        int i = args.ToList().IndexOf(name);
+        if (i < 0 || i + 1 >= args.Count) return null;
+        string value = args[i + 1].Trim().Trim('"');
+        return value.Length == 0 ? null : value;
+    }
+
     private static string? SpaceFolderFromArgs(IReadOnlyList<string> args)
     {
         int i = args.ToList().IndexOf("--space");
@@ -357,6 +373,8 @@ internal static class Snapshot
                      ("zh-Hans", ThemeMode.Light, MonitorViewModel.NetworkTab, "monitor-network"),
                      ("en", ThemeMode.Light, MonitorViewModel.ToolsTab, "monitor-tools"),
                      ("zh-Hans", ThemeMode.Light, MonitorViewModel.ToolsTab, "monitor-tools"),
+                     ("en", ThemeMode.Light, MonitorViewModel.ConnectionsTab, "monitor-connections"),
+                     ("zh-Hans", ThemeMode.Light, MonitorViewModel.ConnectionsTab, "monitor-connections"),
                  })
         {
             Loc.Instance.SetLanguage(lang);
@@ -378,6 +396,31 @@ internal static class Snapshot
             WaitForAnimations(TimeSpan.FromMilliseconds(900));
             string themeName = theme == ThemeMode.Dark ? "dark" : "light";
             Save(window, theme == ThemeMode.Dark, Path.Combine(folder, $"{name}-{lang}-{themeName}.png"));
+            window.Close();
+        }
+
+        // The Capture page with a made-up capture.
+        foreach (var (lang, theme) in new[] { ("en", ThemeMode.Light), ("zh-Hans", ThemeMode.Light), ("zh-Hans", ThemeMode.Dark) })
+        {
+            Loc.Instance.SetLanguage(lang);
+            var vm = new MainViewModel(KnownPaths.FromSystem(), new Settings(), new CleanHistory(null));
+            vm.LoadSample();
+            vm.Capture.LoadSample();
+            vm.PageIndex = MainViewModel.CapturePage;
+            var window = new MainWindow(vm, scanOnOpen: false)
+            {
+                ThemeMode = theme,
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -32000,
+                Top = -32000,
+                Width = 1280,
+                Height = 820,
+                ShowInTaskbar = false,
+                ShowActivated = false,
+            };
+            window.Show();
+            WaitForAnimations(TimeSpan.FromMilliseconds(900));
+            Save(window, theme == ThemeMode.Dark, Path.Combine(folder, $"capture-{lang}-{(theme == ThemeMode.Dark ? "dark" : "light")}.png"));
             window.Close();
         }
 

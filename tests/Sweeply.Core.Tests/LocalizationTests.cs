@@ -63,5 +63,7 @@ public class LocalizationTests
             Assert.Contains($"space.why.{c}", en.Keys);
         foreach (var w in Enum.GetNames<Sweeply.Core.Monitoring.DriveWarnings>().Where(w => w != "None"))
             Assert.Contains($"hw.warn.{w}", en.Keys);
+        foreach (var s in Enum.GetNames<Sweeply.Core.Monitoring.TcpConnectionState>())
+            Assert.Contains($"conn.state.{s}", en.Keys);
     }
 }

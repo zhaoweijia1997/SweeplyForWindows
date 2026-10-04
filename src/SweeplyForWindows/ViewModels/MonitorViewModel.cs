@@ -98,8 +98,11 @@ public sealed class MonitorViewModel : ObservableObject
     /// <summary>The Tools tab: ping and trace route.</summary>
     public ToolsViewModel Tools { get; } = new();
 
+    /// <summary>The Connections tab: which program talks to where.</summary>
+    public ConnectionsViewModel Connections { get; } = new();
+
     /// <summary>Tab numbers, in the order of the tabs.</summary>
-    public const int PerformanceTab = 0, HardwareTab = 1, NetworkTab = 2, ToolsTab = 3;
+    public const int PerformanceTab = 0, HardwareTab = 1, NetworkTab = 2, ToolsTab = 3, ConnectionsTab = 4;
 
     public int TabIndex
     {
@@ -116,6 +119,7 @@ public sealed class MonitorViewModel : ObservableObject
         Hardware.SetShown(_shown && TabIndex == HardwareTab);
         NetworkInfo.SetShown(_shown && TabIndex == NetworkTab);
         Tools.SetShown(_shown && TabIndex == ToolsTab);
+        Connections.SetShown(_shown && TabIndex == ConnectionsTab);
     }
 
     private DateTime Now => _sampleNow ?? DateTime.UtcNow;
@@ -163,6 +167,7 @@ public sealed class MonitorViewModel : ObservableObject
         Hardware.Relocalize();
         NetworkInfo.Relocalize();
         Tools.Relocalize();
+        Connections.Relocalize();
         Refresh(Now);
     }
 
@@ -308,6 +313,7 @@ public sealed class MonitorViewModel : ObservableObject
         Hardware.LoadSample(now);
         NetworkInfo.LoadSample();
         Tools.LoadSample(now);
+        Connections.LoadSample();
         Refresh(now);
     }
 }
