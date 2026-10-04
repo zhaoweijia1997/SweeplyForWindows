@@ -226,7 +226,7 @@ public sealed class ProgramNames
         return new ProgramInfo(processId, name, path, services);
     }
 
-    private static string? ImagePath(int processId)
+    internal static string? ImagePath(int processId)
     {
         IntPtr process = OpenProcess(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, false, processId);
         if (process == IntPtr.Zero) return null;

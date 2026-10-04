@@ -33,6 +33,16 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // SweeplyForWindows.exe --helper <pipe> <app process id>
+        // The capture helper, started by the app itself. It must not reach the single-instance check below,
+        // which would hand its command line to the app and end it.
+        if (e.Args.Length > 0 && e.Args[0] == Capture.HelperProcess.Argument)
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            Shutdown(Capture.HelperProcess.Run(e.Args));
+            return;
+        }
+
         // SweeplyForWindows.exe --snapshot <folder>
         // Renders the pages with made-up results to PNG, without touching the desktop,
         // so screenshots can never contain other windows, real paths or personal files.
@@ -98,6 +108,8 @@ public partial class App : Application
         string? captureFile = ValueAfter(e.Args, "--open-capture");
 
         _viewModel = new MainViewModel(KnownPaths.FromSystem(), _settings);
+        // "--capture-replay <file>": Start plays that file back instead of capturing (for tests; needs no administrator rights).
+        _viewModel.Capture.ReplayFile = ValueAfter(e.Args, "--capture-replay");
         _window = new MainWindow(_viewModel, scanOnOpen: folder is null && spaceFolder is null && captureFile is null);
         _window.Closing += OnWindowClosing;
         _window.Closed += (_, _) => ExitApp();
@@ -193,7 +205,6 @@ public partial class App : Application
         }
     }
 
-    /// <summary>"--space &lt;folder&gt;": open the Space page on that folder. Same quoting rules as the folder menu.</summary>
     /// <summary>The argument after <paramref name="name"/> ("--open-capture file"), without stray quotes.</summary>
     private static string? ValueAfter(IReadOnlyList<string> args, string name)
     {
@@ -203,6 +214,7 @@ public partial class App : Application
         return value.Length == 0 ? null : value;
     }
 
+    /// <summary>"--space &lt;folder&gt;": open the Space page on that folder. Same quoting rules as the folder menu.</summary>
     private static string? SpaceFolderFromArgs(IReadOnlyList<string> args)
     {
         int i = args.ToList().IndexOf("--space");
@@ -263,6 +275,7 @@ public partial class App : Application
     {
         if (_exiting) return;
         _exiting = true;
+        _viewModel?.Capture.StopNow(); // closes the pipe; the capture helper ends with it
         _monitor?.Dispose();
         _reminder?.Dispose();
         _autoClean?.Dispose();

@@ -245,7 +245,10 @@ public sealed class MainViewModel : ObservableObject
     public int PageIndex
     {
         get => _pageIndex;
-        set => SetField(ref _pageIndex, value);
+        set
+        {
+            if (SetField(ref _pageIndex, value) && value == CapturePage) Capture.OnShown();
+        }
     }
 
     public IReadOnlyList<LanguageOption> Languages => Loc.Languages;

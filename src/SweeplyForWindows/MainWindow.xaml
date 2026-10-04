@@ -340,6 +340,10 @@
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Style="{StaticResource NavGlyph}" Text="&#xE8CB;"/>
                         <TextBlock Text="{Binding [nav.capture], Source={x:Static loc:Loc.Instance}}" Margin="14,0,0,0"/>
+                        <!-- Capturing goes on on other pages too: a red dot says so. -->
+                        <Ellipse Width="8" Height="8" Margin="8,1,0,0" VerticalAlignment="Center" Fill="{DynamicResource SystemFillColorCriticalBrush}"
+                                 Visibility="{Binding Capture.IsCapturing, Converter={StaticResource TrueVisibility}}"
+                                 ToolTip="{Binding [cap.capturingNow], Source={x:Static loc:Loc.Instance}}"/>
                     </StackPanel>
                 </ListBoxItem>
                 <ListBoxItem Padding="10,9">
@@ -1238,7 +1242,44 @@
                         <StackPanel Grid.Row="1" Margin="32,0,32,8">
                             <DockPanel>
                                 <StackPanel Orientation="Horizontal">
-                                    <Button Padding="14,6" Command="{Binding OpenCommand}">
+                                    <!-- Start (with the adapter to capture on) and Stop -->
+                                    <Button Style="{DynamicResource AccentButtonStyle}" Padding="14,6" Command="{Binding StartCommand}"
+                                            Visibility="{Binding IsCapturing, Converter={StaticResource FalseVisibility}}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE768;" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding [cap.start], Source={x:Static loc:Loc.Instance}}" Margin="8,0,0,0"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Padding="14,6" Command="{Binding StopCommand}"
+                                            Visibility="{Binding IsCapturing, Converter={StaticResource TrueVisibility}}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE71A;" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource SystemFillColorCriticalBrush}"/>
+                                            <TextBlock Text="{Binding [cap.stop], Source={x:Static loc:Loc.Instance}}" Margin="8,0,0,0"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <ComboBox x:Name="CaptureAdapter" Margin="8,0,0,0" MinWidth="180" MaxWidth="300" VerticalAlignment="Center"
+                                              ItemsSource="{Binding Adapters}" SelectedItem="{Binding SelectedAdapter}" IsEnabled="{Binding IsIdle}"
+                                              ToolTip="{Binding SelectedAdapter.Description}"
+                                              AutomationProperties.Name="{Binding [cap.adapter], Source={x:Static loc:Loc.Instance}}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                                    <!-- The card's name and address only in the open list; the closed box keeps to one line. -->
+                                                    <TextBlock x:Name="AdapterDescription" Text="{Binding Description}" FontSize="11" TextTrimming="CharacterEllipsis"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Visibility="{Binding Description, Converter={StaticResource TextVisibility}}"/>
+                                                </StackPanel>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=ComboBoxItem}}" Value="{x:Null}">
+                                                        <Setter TargetName="AdapterDescription" Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <Button Padding="14,6" Margin="16,0,0,0" Command="{Binding OpenCommand}">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE8E5;" VerticalAlignment="Center"/>
                                             <TextBlock Text="{Binding [cap.open], Source={x:Static loc:Loc.Instance}}" Margin="8,0,0,0"/>
@@ -1250,10 +1291,26 @@
                                             <TextBlock Text="{Binding [cap.save], Source={x:Static loc:Loc.Instance}}" Margin="8,0,0,0"/>
                                         </StackPanel>
                                     </Button>
+                                    <CheckBox Margin="16,0,0,0" VerticalAlignment="Center" IsChecked="{Binding AutoScroll}"
+                                              Content="{Binding [cap.autoScroll], Source={x:Static loc:Loc.Instance}}"
+                                              Visibility="{Binding IsCapturing, Converter={StaticResource TrueVisibility}}"/>
                                 </StackPanel>
                                 <TextBlock Style="{StaticResource Secondary}" Text="{Binding FileName}" Margin="16,0,0,0" VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" HorizontalAlignment="Right"/>
                             </DockPanel>
+                            <!-- Start while the last capture is unsaved: ask before throwing it away -->
+                            <Border Margin="0,8,0,0" Padding="12,8" CornerRadius="4" Background="{DynamicResource SystemFillColorCautionBackgroundBrush}"
+                                    Visibility="{Binding IsAskingDiscard, Converter={StaticResource TrueVisibility}}">
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="12,0,0,0">
+                                        <Button Padding="12,4" Command="{Binding DiscardAndStartCommand}"
+                                                Content="{Binding [cap.discard.yes], Source={x:Static loc:Loc.Instance}}"/>
+                                        <Button x:Name="CaptureDiscardCancel" Padding="12,4" Margin="8,0,0,0" Command="{Binding CancelDiscardCommand}"
+                                                Content="{Binding [cap.discard.no], Source={x:Static loc:Loc.Instance}}"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding DiscardText}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                </DockPanel>
+                            </Border>
                             <TextBlock FontSize="12" Margin="2,6,0,0" Text="{Binding Note}" TextWrapping="Wrap"
                                        Foreground="{DynamicResource SystemFillColorCautionBrush}"
                                        Visibility="{Binding Note, Converter={StaticResource TextVisibility}}"/>
@@ -1264,8 +1321,11 @@
                                 Visibility="{Binding HasPackets, Converter={StaticResource FalseVisibility}}">
                             <StackPanel>
                                 <TextBlock Text="{Binding [cap.empty.title], Source={x:Static loc:Loc.Instance}}" FontWeight="SemiBold" FontSize="14"/>
-                                <TextBlock Style="{StaticResource Secondary}" Margin="0,4,0,0" Text="{Binding [cap.empty.body], Source={x:Static loc:Loc.Instance}}"/>
-                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0" Visibility="{Binding IsLoading, Converter={StaticResource TrueVisibility}}">
+                                <TextBlock Style="{StaticResource Secondary}" Margin="0,4,0,0" Text="{Binding [cap.empty.body], Source={x:Static loc:Loc.Instance}}"
+                                           Visibility="{Binding IsCapturing, Converter={StaticResource FalseVisibility}}"/>
+                                <TextBlock Style="{StaticResource Secondary}" Margin="0,4,0,0" Text="{Binding [cap.waitingFirst], Source={x:Static loc:Loc.Instance}}"
+                                           Visibility="{Binding IsCapturing, Converter={StaticResource TrueVisibility}}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0" Visibility="{Binding IsWaiting, Converter={StaticResource TrueVisibility}}">
                                     <ProgressBar Width="200" IsIndeterminate="True" VerticalAlignment="Center"/>
                                     <TextBlock Style="{StaticResource Secondary}" Margin="12,0,0,0" Text="{Binding StatusText}" VerticalAlignment="Center"/>
                                 </StackPanel>

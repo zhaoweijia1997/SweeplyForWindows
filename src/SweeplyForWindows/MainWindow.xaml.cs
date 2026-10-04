@@ -36,6 +36,17 @@ public partial class MainWindow : Window
             return dialog.ShowDialog(this) == true ? dialog.FileName : null;
         };
         PacketDetails.SelectedItemChanged += (_, e) => viewModel.Capture.SelectedNode = e.NewValue as DetailNode;
+        viewModel.Capture.OwnerWindow = () => new WindowInteropHelper(this).Handle;
+        viewModel.Capture.ScrollToEndRequested += () =>
+        {
+            if (PacketList.Items.Count > 0) PacketList.ScrollIntoView(PacketList.Items[PacketList.Items.Count - 1]);
+        };
+        // Throwing away an unsaved capture: keyboard focus on Cancel, so a stray Enter keeps it.
+        viewModel.Capture.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(CaptureViewModel.IsAskingDiscard) && viewModel.Capture.IsAskingDiscard)
+                Dispatcher.BeginInvoke(() => CaptureDiscardCancel.Focus(), DispatcherPriority.Input);
+        };
         CapturePage.DragOver += (_, e) =>
         {
             e.Effects = CaptureFileOf(e.Data) is null ? DragDropEffects.None : DragDropEffects.Copy;

@@ -2,11 +2,16 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Globalization;
 using System.IO;
+using System.Net;
+using System.Security.Principal;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Sweeply.Core;
 using Sweeply.Core.Capture;
+using Sweeply.Core.Monitoring;
+using SweeplyForWindows.Capture;
 using SweeplyForWindows.Localization;
 
 namespace SweeplyForWindows.ViewModels;
@@ -164,36 +169,70 @@ public sealed class DetailNode : ObservableObject
     public override string ToString() => Text;
 }
 
+/// <summary>A line in the adapter list: one network adapter, or all of them.</summary>
+public sealed class AdapterChoice
+{
+    public required string Name { get; init; }
+
+    /// <summary>The card's own name and its address, to tell similar ones apart.</summary>
+    public string Description { get; init; } = "";
+    public IReadOnlyList<string> Ids { get; init; } = Array.Empty<string>();
+
+    /// <summary>This PC's addresses on it, to tell which end of a packet is this PC.</summary>
+    public IReadOnlyList<IPAddress> Addresses { get; init; } = Array.Empty<IPAddress>();
+
+    public override string ToString() => Name;
+}
+
 /// <summary>
-/// The capture page: a capture file opened (or, later, a live capture) shown as Wireshark shows it — the packet
-/// list, the selected packet's details and its bytes. Nothing is read from the network here; files are only read
-/// when the user opens them, and only written when they save.
+/// The capture page: a capture file, or a live capture, shown as Wireshark shows it — the packet list, the selected
+/// packet's details and its bytes. Capturing only starts when the user clicks Start (and allows it in Windows'
+/// administrator prompt); it goes on while other pages are open, until Stop, the limit, or the app ends. Files are
+/// only read when the user opens them, and only written when they save.
 /// </summary>
 public sealed class CaptureViewModel : ObservableObject
 {
-    /// <summary>The most a capture keeps (in packets and bytes); a file with more is read up to that.</summary>
+    /// <summary>The most a capture keeps (in packets and bytes); a file with more is read up to that, a live capture stops there.</summary>
     public const int MaxPackets = 200_000;
     public const long MaxBytes = 256L * 1024 * 1024;
 
+    /// <summary>Rows added to the list per refresh (5 a second), so a flood of packets can't freeze the window.</summary>
+    private const int MaxRowsPerTick = 5000;
+
     private readonly HashSet<string> _expanded = new(); // what the user opened, kept from packet to packet
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(200) };
     private PacketRow? _selected;
     private DetailNode? _selectedNode;
     private byte[]? _bytes;
     private int _highlightStart = -1, _highlightLength;
-    private string _statusText = "", _fileName = "", _note = "";
-    private bool _isLoading;
+    private string _statusText = "", _fileName = "", _note = "", _liveName = "";
+    private bool _isLoading, _isStarting, _isCapturing, _isStopping, _autoScroll = true, _isAskingDiscard, _unsaved;
+    private bool _sampleMode; // screenshots: this PC's adapters must never show up
     private IReadOnlyList<DetailNode> _details = Array.Empty<DetailNode>();
+    private AdapterChoice? _selectedAdapter;
+    private CaptureSession? _session;
+    private DateTime _startedUtc;
 
     public CaptureViewModel()
     {
-        OpenCommand = new RelayCommand(_ => { if (PickOpenFile?.Invoke() is string path) _ = OpenAsync(path); }, () => !IsLoading);
+        OpenCommand = new RelayCommand(_ => { if (PickOpenFile?.Invoke() is string path) _ = OpenAsync(path); }, () => !IsLoading && IsIdle);
         SaveCommand = new RelayCommand(_ => Save(), () => !IsLoading && Store.Packets.Count > 0);
+        StartCommand = new RelayCommand(_ => RequestStart(), () => CanStart);
+        StopCommand = new RelayCommand(async _ => await StopAsync(), () => IsCapturing && !_isStopping);
+        DiscardAndStartCommand = new RelayCommand(async _ =>
+        {
+            IsAskingDiscard = false;
+            _unsaved = false;
+            await StartAsync();
+        });
+        CancelDiscardCommand = new RelayCommand(_ => IsAskingDiscard = false);
         CopyRowCommand = new RelayCommand(p => Copy((p as PacketRow ?? Selected)?.ToString()));
         CopyBytesCommand = new RelayCommand(p => { if ((p as PacketRow ?? Selected) is { } row) Copy(Format.Hex(Store.Packets[row.Index].Data, int.MaxValue)); });
         CopyNodeCommand = new RelayCommand(p => Copy((p as DetailNode ?? SelectedNode)?.Text));
         ByteClickedCommand = new RelayCommand(p => { if (p is int offset) SelectByte(offset); });
         ExpandAllCommand = new RelayCommand(_ => SetAllExpanded(true));
         CollapseAllCommand = new RelayCommand(_ => SetAllExpanded(false));
+        _timer.Tick += (_, _) => Pump();
     }
 
     public CaptureStore Store { get; } = new();
@@ -207,6 +246,8 @@ public sealed class CaptureViewModel : ObservableObject
         set
         {
             if (!SetField(ref _selected, value)) return;
+            // Looking at a packet while capturing: the list stops following the newest ones.
+            if (value is not null && IsCapturing) AutoScroll = false;
             ShowDetails();
         }
     }
@@ -230,19 +271,85 @@ public sealed class CaptureViewModel : ObservableObject
     public string StatusText { get => _statusText; private set => SetField(ref _statusText, value); }
     public string FileName { get => _fileName; private set => SetField(ref _fileName, value); }
 
-    /// <summary>A line about the capture (cut short, read only in part); empty when there's nothing to say.</summary>
+    /// <summary>A line about the capture (cut short, read only in part, why capturing stopped); empty when there's nothing to say.</summary>
     public string Note { get => _note; private set => SetField(ref _note, value); }
 
     public bool IsLoading
     {
         get => _isLoading;
-        private set { if (SetField(ref _isLoading, value)) CommandManager.InvalidateRequerySuggested(); }
+        private set
+        {
+            if (!SetField(ref _isLoading, value)) return;
+            OnPropertyChanged(nameof(IsWaiting));
+            CommandManager.InvalidateRequerySuggested();
+        }
     }
+
+    /// <summary>Something is under way while the list is still empty: a file opening, the helper starting, the first packet.</summary>
+    public bool IsWaiting => IsLoading || IsStarting || IsCapturing;
 
     public bool HasPackets => Store.Packets.Count > 0;
 
+    /// <summary>The adapters that can be captured on (connected, with an address), and "all of them".</summary>
+    public ObservableCollection<AdapterChoice> Adapters { get; } = new();
+
+    public AdapterChoice? SelectedAdapter
+    {
+        get => _selectedAdapter;
+        set { if (SetField(ref _selectedAdapter, value)) CommandManager.InvalidateRequerySuggested(); }
+    }
+
+    /// <summary>Waiting for the helper (and Windows' administrator prompt).</summary>
+    public bool IsStarting
+    {
+        get => _isStarting;
+        private set
+        {
+            if (!SetField(ref _isStarting, value)) return;
+            OnPropertyChanged(nameof(IsIdle));
+            OnPropertyChanged(nameof(IsWaiting));
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    public bool IsCapturing
+    {
+        get => _isCapturing;
+        private set
+        {
+            if (!SetField(ref _isCapturing, value)) return;
+            OnPropertyChanged(nameof(IsIdle));
+            OnPropertyChanged(nameof(IsWaiting));
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    /// <summary>Neither capturing nor starting to: the adapter can be changed, a file opened.</summary>
+    public bool IsIdle => !IsCapturing && !IsStarting;
+
+    public bool CanStart => IsIdle && !IsLoading && SelectedAdapter is not null;
+
+    /// <summary>Keep the newest packet in view while capturing.</summary>
+    public bool AutoScroll
+    {
+        get => _autoScroll;
+        set { if (SetField(ref _autoScroll, value) && value && IsCapturing) ScrollToEndRequested?.Invoke(); }
+    }
+
+    /// <summary>Start was clicked while the last capture is still unsaved: asking whether to throw it away.</summary>
+    public bool IsAskingDiscard { get => _isAskingDiscard; private set => SetField(ref _isAskingDiscard, value); }
+
+    public string DiscardText => Loc.Instance.Format("cap.discard.text", Store.Packets.Count.ToString("N0", Loc.Instance.Culture));
+
+    /// <summary>"--capture-replay": Start plays this file back instead of capturing (for tests; no administrator rights needed).</summary>
+    public string? ReplayFile { get; set; }
+
     public ICommand OpenCommand { get; }
     public ICommand SaveCommand { get; }
+    public ICommand StartCommand { get; }
+    public ICommand StopCommand { get; }
+    public ICommand DiscardAndStartCommand { get; }
+    public ICommand CancelDiscardCommand { get; }
     public ICommand CopyRowCommand { get; }
     public ICommand CopyBytesCommand { get; }
     public ICommand CopyNodeCommand { get; }
@@ -254,10 +361,212 @@ public sealed class CaptureViewModel : ObservableObject
     public Func<string?>? PickOpenFile { get; set; }
     public Func<string, string?>? PickSaveFile { get; set; }
 
+    /// <summary>Set by the window: the window Windows' administrator prompt belongs to.</summary>
+    public Func<IntPtr>? OwnerWindow { get; set; }
+
+    /// <summary>Raised when the list should show its last row.</summary>
+    public event Action? ScrollToEndRequested;
+
+    /// <summary>The page came into view: read the adapters again (one may have connected meanwhile).</summary>
+    public void OnShown()
+    {
+        if (IsIdle && !_sampleMode) _ = RefreshAdaptersAsync();
+    }
+
+    public async Task RefreshAdaptersAsync()
+    {
+        if (ReplayFile is { } replay)
+        {
+            SetAdapters(new[] { new AdapterChoice { Name = Loc.Instance.Format("cap.replay", Path.GetFileName(replay)), Ids = new[] { "replay" } } });
+            return;
+        }
+        IReadOnlyList<NetworkAdapter> adapters;
+        try { adapters = await Task.Run(NetworkAdapters.Read); }
+        catch (System.Net.NetworkInformation.NetworkInformationException) { return; }
+        var usable = adapters.Where(a => a.IsUp && (a.IPv4.Count > 0 || a.IPv6.Count > 0)).ToList();
+        var choices = usable.Select(a => new AdapterChoice
+        {
+            Name = a.Name,
+            Description = a.IPv4.Count > 0 ? $"{a.Description} · {a.IPv4[0].Address}" : a.Description,
+            Ids = new[] { a.Id },
+            Addresses = Own(a).ToList(),
+        }).ToList();
+        if (usable.Count > 1)
+            choices.Add(new AdapterChoice
+            {
+                Name = Loc.Instance["cap.allAdapters"],
+                Description = Loc.Instance.Format("cap.allAdapters.count", usable.Count),
+                Ids = usable.Select(a => a.Id).ToList(),
+                Addresses = usable.SelectMany(Own).ToList(),
+            });
+        if (IsIdle) SetAdapters(choices);
+
+        static IEnumerable<IPAddress> Own(NetworkAdapter a) => a.IPv4.Select(v4 => v4.Address).Concat(a.IPv6);
+    }
+
+    private void SetAdapters(IReadOnlyList<AdapterChoice> choices)
+    {
+        string? keep = SelectedAdapter is { } old ? string.Join(",", old.Ids) : null;
+        Adapters.Clear();
+        foreach (var choice in choices) Adapters.Add(choice);
+        SelectedAdapter = choices.FirstOrDefault(c => string.Join(",", c.Ids) == keep) ?? choices.FirstOrDefault();
+    }
+
+    private void RequestStart()
+    {
+        if (!CanStart) return;
+        if (_unsaved && Store.Packets.Count > 0)
+        {
+            OnPropertyChanged(nameof(DiscardText));
+            IsAskingDiscard = true;
+            return;
+        }
+        _ = StartAsync();
+    }
+
+    private async Task StartAsync()
+    {
+        if (!CanStart || SelectedAdapter is not { } choice) return;
+        IsStarting = true;
+        Note = "";
+        try
+        {
+            string backend = ReplayFile is not null ? HelperRequest.ReplayBackend
+                : Npcap.Installed ? HelperRequest.NpcapBackend : HelperRequest.RawSocketBackend;
+            var (session, error) = await OpenSessionAsync(backend, choice);
+            // Npcap there but not working (an old or broken install): Windows' own way instead.
+            if (session is null && error?.Code == "NpcapFailed")
+                (session, error) = await OpenSessionAsync(HelperRequest.RawSocketBackend, choice);
+            if (session is null)
+            {
+                Note = ErrorText(error);
+                return;
+            }
+            Begin(session, choice);
+        }
+        finally
+        {
+            IsStarting = false;
+            UpdateStatus();
+        }
+    }
+
+    private Task<(CaptureSession? Session, HelperError? Error)> OpenSessionAsync(string backend, AdapterChoice choice)
+    {
+        bool elevate = backend switch
+        {
+            HelperRequest.RawSocketBackend => !IsElevated.Value,
+            HelperRequest.NpcapBackend => Npcap.AdminOnly && !IsElevated.Value,
+            _ => false,
+        };
+        StatusText = Loc.Instance[elevate ? "cap.waitingAdmin" : "cap.starting"];
+        var request = new HelperRequest { Backend = backend, Adapters = choice.Ids.ToList(), File = ReplayFile };
+        // A file played back isn't this PC's traffic: no programs to name.
+        Action<CapturedPacket>? name = backend == HelperRequest.ReplayBackend ? null : new ProgramResolver(choice.Addresses).Resolve;
+        return CaptureSession.StartAsync(request, elevate, name, OwnerWindow?.Invoke() ?? IntPtr.Zero);
+    }
+
+    private void Begin(CaptureSession session, AdapterChoice choice)
+    {
+        _session = session;
+        Selected = null;
+        Store.Clear();
+        Store.Interfaces.AddRange(session.Connection.Hello!.Interfaces);
+        Rows = new ObservableCollection<PacketRow>();
+        OnPropertyChanged(nameof(Rows));
+        OnPropertyChanged(nameof(HasPackets));
+        _liveName = choice.Name;
+        FileName = "";
+        Note = "";
+        _unsaved = false;
+        _startedUtc = DateTime.UtcNow;
+        IsCapturing = true;
+        AutoScroll = true;
+        _timer.Start();
+    }
+
+    /// <summary>Moves what arrived since the last refresh into the list; stops at the limit or when the helper ended.</summary>
+    private void Pump()
+    {
+        if (_session is not { } session || _isStopping) return;
+        bool full = Take(session, MaxRowsPerTick);
+        UpdateStatus();
+        var culture = Loc.Instance.Culture;
+        if (full)
+            _ = StopAsync(Loc.Instance.Format("cap.limit", MaxPackets.ToString("N0", culture), SizeFormatter.Format(MaxBytes, culture)));
+        else if (session.Connection.Completion.IsCompleted && session.Connection.Packets.IsEmpty)
+            _ = StopAsync(ErrorText(session.Connection.Error)); // the helper ended by itself
+    }
+
+    /// <summary>Adds up to <paramref name="most"/> waiting packets; true when the capture is full.</summary>
+    private bool Take(CaptureSession session, int most)
+    {
+        var queue = session.Connection.Packets;
+        bool wasEmpty = Store.Packets.Count == 0, full = false;
+        int added = 0;
+        while (added < most && queue.TryPeek(out var packet))
+        {
+            if (Store.Packets.Count >= MaxPackets || Store.Bytes + packet.Data.Length > MaxBytes)
+            {
+                full = true;
+                break;
+            }
+            queue.TryDequeue(out _);
+            Store.Add(packet);
+            Rows.Add(new PacketRow(Store, Store.Packets.Count - 1));
+            added++;
+        }
+        if (added > 0)
+        {
+            _unsaved = true;
+            if (wasEmpty) OnPropertyChanged(nameof(HasPackets));
+            if (AutoScroll) ScrollToEndRequested?.Invoke();
+        }
+        return full;
+    }
+
+    private async Task StopAsync(string? note = null)
+    {
+        if (_session is not { } session || _isStopping) return;
+        _isStopping = true;
+        CommandManager.InvalidateRequerySuggested();
+        _timer.Stop();
+        try
+        {
+            await session.StopAsync(); // the helper sends what it still has, then the pipe closes
+            Take(session, int.MaxValue); // the last ones (up to the limit)
+            long dropped = session.Connection.Dropped;
+            var culture = Loc.Instance.Culture;
+            Note = note ?? (session.Connection.Error is { } error ? ErrorText(error) : "");
+            if (dropped > 0) Note = (Note + " " + Loc.Instance.Format("cap.droppedNote", dropped.ToString("N0", culture))).Trim();
+        }
+        finally
+        {
+            _session = null;
+            _isStopping = false;
+            IsCapturing = false;
+            FileName = _liveName;
+            UpdateStatus();
+        }
+    }
+
+    /// <summary>The app is exiting: close the pipe at once (the helper ends with it).</summary>
+    public void StopNow()
+    {
+        _timer.Stop();
+        _session?.Dispose();
+        _session = null;
+    }
+
     /// <summary>Opens a pcap or pcapng file (from the button, a drop on the page, or "--open-capture").</summary>
     public async Task OpenAsync(string path)
     {
         if (IsLoading) return;
+        if (!IsIdle)
+        {
+            Note = Loc.Instance["cap.stopFirst"];
+            return;
+        }
         IsLoading = true;
         StatusText = Loc.Instance.Format("cap.opening", Path.GetFileName(path));
         try
@@ -273,6 +582,7 @@ public sealed class CaptureViewModel : ObservableObject
             Replace(store);
             FileName = Path.GetFileName(path);
             Note = file.Truncated ? Loc.Instance.Format("cap.truncated", file.Packets.Count) : "";
+            _unsaved = false;
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or OutOfMemoryException)
         {
@@ -297,18 +607,22 @@ public sealed class CaptureViewModel : ObservableObject
 
     private void Save()
     {
-        string suggested = FileName.Length > 0 ? Path.ChangeExtension(FileName, ".pcapng") : $"capture-{DateTime.Now:yyyyMMdd-HHmmss}.pcapng";
+        string suggested = FileName.Length > 0 && !IsCapturing && Path.HasExtension(FileName)
+            ? Path.ChangeExtension(FileName, ".pcapng")
+            : $"capture-{DateTime.Now:yyyyMMdd-HHmmss}.pcapng";
         if (PickSaveFile?.Invoke(suggested) is not string path) return;
         try
         {
+            int count = Store.Packets.Count; // a live capture goes on growing; this many are written
             using var stream = new FileStream(path, FileMode.Create, FileAccess.Write);
             using var writer = new PcapNgWriter(stream, "SweeplyForWindows");
-            foreach (var packet in Store.Packets)
+            for (int i = 0; i < count; i++)
             {
-                string name = Store.InterfaceName(packet);
-                writer.Write(packet, writer.Interface(packet.Link, name));
+                var packet = Store.Packets[i];
+                writer.Write(packet, writer.Interface(packet.Link, Store.InterfaceName(packet)));
             }
-            Note = Loc.Instance.Format("cap.saved", Path.GetFileName(path), Store.Packets.Count);
+            Note = Loc.Instance.Format("cap.saved", Path.GetFileName(path), count);
+            if (!IsCapturing) _unsaved = false;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -366,12 +680,45 @@ public sealed class CaptureViewModel : ObservableObject
 
     private void UpdateStatus()
     {
-        var culture = Loc.Instance.Culture;
-        StatusText = Store.Packets.Count == 0 ? "" : Loc.Instance.Format("cap.status", Store.Packets.Count.ToString("N0", culture), SizeFormatter.Format(Store.Bytes, culture));
+        var loc = Loc.Instance;
+        var culture = loc.Culture;
+        if (IsStarting) return; // "waiting for Windows" stays until it is answered
+        if (IsCapturing)
+        {
+            var elapsed = DateTime.UtcNow - _startedUtc;
+            string text = loc.Format("cap.live.status", _liveName, Store.Packets.Count.ToString("N0", culture),
+                SizeFormatter.Format(Store.Bytes, culture), elapsed.TotalHours >= 1 ? elapsed.ToString(@"h\:mm\:ss") : elapsed.ToString(@"m\:ss"));
+            long dropped = _session?.Connection.Dropped ?? 0;
+            if (dropped > 0) text += " · " + loc.Format("cap.live.dropped", dropped.ToString("N0", culture));
+            StatusText = text;
+        }
+        else StatusText = Store.Packets.Count == 0 ? "" : loc.Format("cap.status", Store.Packets.Count.ToString("N0", culture), SizeFormatter.Format(Store.Bytes, culture));
         CommandManager.InvalidateRequerySuggested();
     }
 
-    public void Relocalize() => UpdateStatus();
+    /// <summary>The words for why capturing failed or stopped (the helper only sends a code).</summary>
+    private static string ErrorText(HelperError? error)
+    {
+        var loc = Loc.Instance;
+        if (error is null) return loc["cap.error.HelperLost"];
+        string key = "cap.error." + error.Code;
+        string text = loc[key];
+        return text == key
+            ? loc.Format("cap.error.Failed", error.Detail.Length > 0 ? error.Detail : error.Code)
+            : string.Format(loc.Culture, text, error.Detail);
+    }
+
+    private static readonly Lazy<bool> IsElevated = new(() =>
+    {
+        using var identity = WindowsIdentity.GetCurrent();
+        return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
+    });
+
+    public void Relocalize()
+    {
+        UpdateStatus();
+        if (IsIdle && Adapters.Count > 0 && ReplayFile is null && !_sampleMode) _ = RefreshAdaptersAsync(); // "All adapters" in the new language
+    }
 
     private static void Copy(string? text)
     {
@@ -383,13 +730,16 @@ public sealed class CaptureViewModel : ObservableObject
     /// <summary>Made-up packets for screenshots (documentation addresses only), as if a capture file was open.</summary>
     public void LoadSample()
     {
+        _sampleMode = true;
         var store = new CaptureStore();
         store.Interfaces.Add(new CaptureInterface(LinkType.Ethernet, "Wi-Fi"));
         foreach (var packet in SamplePackets.Build()) store.Add(packet);
         Replace(store);
         FileName = "example.pcapng";
+        SetAdapters(new[] { new AdapterChoice { Name = "Wi-Fi", Description = "Wireless network adapter · 192.0.2.23", Ids = new[] { "{sample}" } } });
         Selected = Rows.Count > 5 ? Rows[5] : Rows.FirstOrDefault();
         foreach (var node in Details) node.IsExpanded = node.Node.Field is "tls";
+        _unsaved = false;
         UpdateStatus();
     }
 }
