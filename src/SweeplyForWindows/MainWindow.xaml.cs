@@ -1,5 +1,7 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using SweeplyForWindows.ViewModels;
 
@@ -40,6 +42,29 @@ public partial class MainWindow : Window
         viewModel.Capture.ScrollToEndRequested += () =>
         {
             if (PacketList.Items.Count > 0) PacketList.ScrollIntoView(PacketList.Items[PacketList.Items.Count - 1]);
+        };
+        viewModel.Capture.ScrollToSelectedRequested += () =>
+        {
+            if (viewModel.Capture.Selected is { } row) Dispatcher.BeginInvoke(() => PacketList.ScrollIntoView(row), DispatcherPriority.Background);
+        };
+        CaptureFilterPresets.Click += (_, _) =>
+        {
+            var menu = CaptureFilterPresets.ContextMenu;
+            menu.PlacementTarget = CaptureFilterPresets;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            menu.IsOpen = true;
+        };
+        // A right click selects the line under the mouse first, so its menu acts on that line.
+        PacketDetails.PreviewMouseRightButtonDown += (_, e) =>
+        {
+            for (var element = e.OriginalSource as DependencyObject; element is not null;
+                 element = element is Visual ? VisualTreeHelper.GetParent(element) : LogicalTreeHelper.GetParent(element))
+            {
+                if (element is not TreeViewItem item) continue;
+                item.IsSelected = true;
+                item.Focus();
+                break;
+            }
         };
         // Throwing away an unsaved capture: keyboard focus on Cancel, so a stray Enter keeps it.
         viewModel.Capture.PropertyChanged += (_, e) =>

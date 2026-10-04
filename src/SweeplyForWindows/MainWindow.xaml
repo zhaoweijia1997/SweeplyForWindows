@@ -1298,6 +1298,75 @@
                                 <TextBlock Style="{StaticResource Secondary}" Text="{Binding FileName}" Margin="16,0,0,0" VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" HorizontalAlignment="Right"/>
                             </DockPanel>
+                            <!-- Display filter, written as in Wireshark: applies on Enter, Esc clears it -->
+                            <DockPanel Margin="0,8,0,0">
+                                <Button x:Name="CaptureFilterPresets" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="10,5"
+                                        AutomationProperties.Name="{Binding [cap.filter.presets], Source={x:Static loc:Loc.Instance}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding [cap.filter.presets], Source={x:Static loc:Loc.Instance}}"/>
+                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE70D;" FontSize="10" Margin="6,1,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <Button.ContextMenu>
+                                        <ContextMenu ItemsSource="{Binding Presets}">
+                                            <ContextMenu.ItemContainerStyle>
+                                                <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                                                    <Setter Property="Header" Value="{Binding Name}"/>
+                                                    <Setter Property="InputGestureText" Value="{Binding Text}"/>
+                                                    <Setter Property="Command" Value="{Binding DataContext.PresetCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                                    <Setter Property="CommandParameter" Value="{Binding Text}"/>
+                                                </Style>
+                                            </ContextMenu.ItemContainerStyle>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
+                                <Button DockPanel.Dock="Right" Margin="6,0,0,0" Padding="12,5" Command="{Binding ApplyFilterCommand}"
+                                        Content="{Binding [cap.filter.apply], Source={x:Static loc:Loc.Instance}}"/>
+                                <Button DockPanel.Dock="Right" Margin="6,0,0,0" Padding="9,5" Command="{Binding ClearFilterCommand}"
+                                        ToolTip="{Binding [cap.filter.clear], Source={x:Static loc:Loc.Instance}}"
+                                        AutomationProperties.Name="{Binding [cap.filter.clear], Source={x:Static loc:Loc.Instance}}">
+                                    <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE711;" FontSize="12"/>
+                                </Button>
+                                <Grid>
+                                    <TextBox x:Name="CaptureFilter" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" Padding="8,5,30,5"
+                                             FontFamily="Cascadia Mono, Consolas, Segoe UI" VerticalContentAlignment="Center"
+                                             ToolTip="{Binding [cap.filter.help], Source={x:Static loc:Loc.Instance}}"
+                                             AutomationProperties.Name="{Binding [cap.filter.placeholder], Source={x:Static loc:Loc.Instance}}">
+                                        <TextBox.InputBindings>
+                                            <KeyBinding Key="Enter" Command="{Binding ApplyFilterCommand}"/>
+                                            <KeyBinding Key="Escape" Command="{Binding ClearFilterCommand}"/>
+                                        </TextBox.InputBindings>
+                                    </TextBox>
+                                    <!-- What to type, while it's empty -->
+                                    <TextBlock Margin="10,0,30,0" VerticalAlignment="Center" IsHitTestVisible="False" TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" FontSize="12.5"
+                                               Text="{Binding [cap.filter.placeholder], Source={x:Static loc:Loc.Instance}}"
+                                               Visibility="{Binding FilterText, Converter={StaticResource TextVisibility}, ConverterParameter=invert}"/>
+                                    <!-- Whether what's typed reads as a filter -->
+                                    <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" IsHitTestVisible="False"
+                                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="13">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding FilterState}" Value="Valid">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                        <Setter Property="Text" Value="&#xE73E;"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding FilterState}" Value="Invalid">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                        <Setter Property="Text" Value="&#xE711;"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
+                            </DockPanel>
+                            <TextBlock FontSize="12" Margin="2,4,0,0" Text="{Binding FilterMessage}" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                                       Visibility="{Binding FilterMessage, Converter={StaticResource TextVisibility}}"/>
                             <!-- Start while the last capture is unsaved: ask before throwing it away -->
                             <Border Margin="0,8,0,0" Padding="12,8" CornerRadius="4" Background="{DynamicResource SystemFillColorCautionBackgroundBrush}"
                                     Visibility="{Binding IsAskingDiscard, Converter={StaticResource TrueVisibility}}">
@@ -1399,6 +1468,12 @@
                                                           Command="{Binding PlacementTarget.Tag.CopyRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
                                                 <MenuItem Header="{Binding [cap.copyBytes], Source={x:Static loc:Loc.Instance}}"
                                                           Command="{Binding PlacementTarget.Tag.CopyBytesCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                                <Separator/>
+                                                <MenuItem Header="{Binding [cap.filter.conversation], Source={x:Static loc:Loc.Instance}}"
+                                                          Command="{Binding PlacementTarget.Tag.ConversationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                                <MenuItem Header="{Binding [cap.filter.program], Source={x:Static loc:Loc.Instance}}"
+                                                          Command="{Binding PlacementTarget.Tag.ProgramFilterCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"
+                                                          Visibility="{Binding Program, Converter={StaticResource TextVisibility}}"/>
                                             </ContextMenu>
                                         </Setter.Value>
                                     </Setter>
@@ -1428,6 +1503,10 @@
                                   Visibility="{Binding HasPackets, Converter={StaticResource TrueVisibility}}">
                             <TreeView.ContextMenu>
                                 <ContextMenu>
+                                    <MenuItem Header="{Binding [cap.filter.asFilter], Source={x:Static loc:Loc.Instance}}" Command="{Binding FilterNodeCommand}"/>
+                                    <MenuItem Header="{Binding [cap.filter.exclude], Source={x:Static loc:Loc.Instance}}" Command="{Binding ExcludeNodeCommand}"/>
+                                    <MenuItem Header="{Binding [cap.filter.and], Source={x:Static loc:Loc.Instance}}" Command="{Binding AndNodeCommand}"/>
+                                    <Separator/>
                                     <MenuItem Header="{Binding [cap.copyNode], Source={x:Static loc:Loc.Instance}}" Command="{Binding CopyNodeCommand}"/>
                                     <Separator/>
                                     <MenuItem Header="{Binding [cap.expandAll], Source={x:Static loc:Loc.Instance}}" Command="{Binding ExpandAllCommand}"/>

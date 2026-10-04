@@ -169,6 +169,17 @@ public sealed class DetailNode : ObservableObject
     public override string ToString() => Text;
 }
 
+/// <summary>How the display filter being typed reads: nothing yet, a filter, or a mistake.</summary>
+public enum FilterState
+{
+    Empty,
+    Valid,
+    Invalid,
+}
+
+/// <summary>A ready-made display filter in the menu next to the filter box.</summary>
+public sealed record FilterPreset(string Name, string Text);
+
 /// <summary>A line in the adapter list: one network adapter, or all of them.</summary>
 public sealed class AdapterChoice
 {
@@ -213,6 +224,18 @@ public sealed class CaptureViewModel : ObservableObject
     private CaptureSession? _session;
     private DateTime _startedUtc;
 
+    // Display filter: every row is in _allRows (same order as Store.Packets); Rows shows those that pass.
+    private readonly List<PacketRow> _allRows = new();
+    private DisplayFilter? _filter;
+    private CancellationTokenSource? _filterRun;
+    private string _filterText = "", _filterMessage = "";
+    private FilterState _filterState;
+    private bool _isFiltering;
+    private int _filterDone, _filterTotal;
+    private readonly DispatcherTimer _filterProgress = new() { Interval = TimeSpan.FromMilliseconds(250) };
+
+    private enum FilterJoin { Only, Not, And }
+
     public CaptureViewModel()
     {
         OpenCommand = new RelayCommand(_ => { if (PickOpenFile?.Invoke() is string path) _ = OpenAsync(path); }, () => !IsLoading && IsIdle);
@@ -232,7 +255,24 @@ public sealed class CaptureViewModel : ObservableObject
         ByteClickedCommand = new RelayCommand(p => { if (p is int offset) SelectByte(offset); });
         ExpandAllCommand = new RelayCommand(_ => SetAllExpanded(true));
         CollapseAllCommand = new RelayCommand(_ => SetAllExpanded(false));
+        ApplyFilterCommand = new RelayCommand(_ => _ = ApplyFilterAsync(FilterText));
+        ClearFilterCommand = new RelayCommand(_ =>
+        {
+            FilterText = "";
+            _ = ApplyFilterAsync("");
+        });
+        PresetCommand = new RelayCommand(p => { if (p is string text) UseFilter(text, FilterJoin.Only); });
+        FilterNodeCommand = new RelayCommand(p => UseFilter(FilterOf(p), FilterJoin.Only), () => SelectedNode?.Node.Field is not null);
+        ExcludeNodeCommand = new RelayCommand(p => UseFilter(FilterOf(p), FilterJoin.Not), () => SelectedNode?.Node.Field is not null);
+        AndNodeCommand = new RelayCommand(p => UseFilter(FilterOf(p), FilterJoin.And), () => SelectedNode?.Node.Field is not null);
+        ConversationCommand = new RelayCommand(p => { if ((p as PacketRow ?? Selected) is { } row) UseFilter(ConversationFilter(row), FilterJoin.Only); });
+        ProgramFilterCommand = new RelayCommand(p =>
+        {
+            if ((p as PacketRow ?? Selected) is { Program.Length: > 0 } row)
+                UseFilter($"{DisplayFilter.ProcessName} == {DisplayFilter.Quote(row.Program)}", FilterJoin.Only);
+        });
         _timer.Tick += (_, _) => Pump();
+        _filterProgress.Tick += (_, _) => UpdateStatus();
     }
 
     public CaptureStore Store { get; } = new();
@@ -356,6 +396,66 @@ public sealed class CaptureViewModel : ObservableObject
     public ICommand ByteClickedCommand { get; }
     public ICommand ExpandAllCommand { get; }
     public ICommand CollapseAllCommand { get; }
+    public ICommand ApplyFilterCommand { get; }
+    public ICommand ClearFilterCommand { get; }
+    public ICommand PresetCommand { get; }
+    public ICommand FilterNodeCommand { get; }
+    public ICommand ExcludeNodeCommand { get; }
+    public ICommand AndNodeCommand { get; }
+    public ICommand ConversationCommand { get; }
+    public ICommand ProgramFilterCommand { get; }
+
+    /// <summary>The display filter being typed; it applies on Enter (or Apply).</summary>
+    public string FilterText
+    {
+        get => _filterText;
+        set
+        {
+            if (!SetField(ref _filterText, value ?? "")) return;
+            FilterState state = FilterState.Empty;
+            if (!string.IsNullOrWhiteSpace(_filterText))
+            {
+                try
+                {
+                    DisplayFilter.Parse(_filterText);
+                    state = FilterState.Valid;
+                }
+                catch (FilterSyntaxException) { state = FilterState.Invalid; }
+            }
+            FilterState = state;
+            if (state != FilterState.Invalid && _filterMessage.Length > 0 && !IsFiltering) FilterMessage = ""; // the mistake is fixed
+        }
+    }
+
+    public FilterState FilterState { get => _filterState; private set => SetField(ref _filterState, value); }
+
+    /// <summary>What went wrong with the filter, or why nothing passes it; empty otherwise.</summary>
+    public string FilterMessage { get => _filterMessage; private set => SetField(ref _filterMessage, value); }
+
+    /// <summary>The filter is being applied to the packets in the background (its progress shows in the status line).</summary>
+    public bool IsFiltering
+    {
+        get => _isFiltering;
+        private set
+        {
+            if (!SetField(ref _isFiltering, value)) return;
+            if (value) _filterProgress.Start();
+            else _filterProgress.Stop();
+            UpdateStatus();
+        }
+    }
+
+    /// <summary>A display filter is applied (some packets may be hidden).</summary>
+    public bool IsFiltered => _filter is not null;
+
+    public IReadOnlyList<FilterPreset> Presets => new[]
+    {
+        new FilterPreset(Loc.Instance["cap.filter.preset.dns"], "dns"),
+        new FilterPreset(Loc.Instance["cap.filter.preset.web"], "http || tls || quic"),
+        new FilterPreset(Loc.Instance["cap.filter.preset.problems"], "tcp.analysis.flags"),
+        new FilterPreset(Loc.Instance["cap.filter.preset.handshakes"], "tcp.flags.syn == 1 || tcp.flags.fin == 1 || tcp.flags.reset == 1"),
+        new FilterPreset(Loc.Instance["cap.filter.preset.quiet"], "!(arp || ssdp || mdns || llmnr || nbns || igmp || stp)"),
+    };
 
     /// <summary>Set by the window: asks for a capture file to open, or where to save.</summary>
     public Func<string?>? PickOpenFile { get; set; }
@@ -366,6 +466,9 @@ public sealed class CaptureViewModel : ObservableObject
 
     /// <summary>Raised when the list should show its last row.</summary>
     public event Action? ScrollToEndRequested;
+
+    /// <summary>Raised when the list should bring the selected row into view (after filtering).</summary>
+    public event Action? ScrollToSelectedRequested;
 
     /// <summary>The page came into view: read the adapters again (one may have connected meanwhile).</summary>
     public void OnShown()
@@ -469,9 +572,14 @@ public sealed class CaptureViewModel : ObservableObject
     private void Begin(CaptureSession session, AdapterChoice choice)
     {
         _session = session;
+        _filterRun?.Cancel(); // the filter stays; it applies to the new packets as they come
+        _filterRun = null;
+        IsFiltering = false;
+        FilterMessage = "";
         Selected = null;
         Store.Clear();
         Store.Interfaces.AddRange(session.Connection.Hello!.Interfaces);
+        _allRows.Clear();
         Rows = new ObservableCollection<PacketRow>();
         OnPropertyChanged(nameof(Rows));
         OnPropertyChanged(nameof(HasPackets));
@@ -498,12 +606,16 @@ public sealed class CaptureViewModel : ObservableObject
             _ = StopAsync(ErrorText(session.Connection.Error)); // the helper ended by itself
     }
 
-    /// <summary>Adds up to <paramref name="most"/> waiting packets; true when the capture is full.</summary>
+    /// <summary>
+    /// Adds up to <paramref name="most"/> waiting packets; true when the capture is full. With a display filter each
+    /// one is decoded to test it, so a refresh then also stops after 60 ms and leaves the rest for the next one.
+    /// </summary>
     private bool Take(CaptureSession session, int most)
     {
         var queue = session.Connection.Packets;
         bool wasEmpty = Store.Packets.Count == 0, full = false;
-        int added = 0;
+        int added = 0, shown = 0;
+        long started = Environment.TickCount64;
         while (added < most && queue.TryPeek(out var packet))
         {
             if (Store.Packets.Count >= MaxPackets || Store.Bytes + packet.Data.Length > MaxBytes)
@@ -513,17 +625,149 @@ public sealed class CaptureViewModel : ObservableObject
             }
             queue.TryDequeue(out _);
             Store.Add(packet);
-            Rows.Add(new PacketRow(Store, Store.Packets.Count - 1));
+            var row = new PacketRow(Store, Store.Packets.Count - 1);
+            _allRows.Add(row);
             added++;
+            // While a new filter runs over the earlier packets, it picks up these ones too when it finishes.
+            if (_filter is null || (!IsFiltering && Passes(row.Index)))
+            {
+                Rows.Add(row);
+                shown++;
+            }
+            if (_filter is not null && most != int.MaxValue && Environment.TickCount64 - started > 60) break;
         }
         if (added > 0)
         {
             _unsaved = true;
             if (wasEmpty) OnPropertyChanged(nameof(HasPackets));
-            if (AutoScroll) ScrollToEndRequested?.Invoke();
+            if (shown > 0 && AutoScroll) ScrollToEndRequested?.Invoke();
         }
         return full;
     }
+
+    private bool Passes(int index, bool[]? seen = null) => _filter is null || _filter.Matches(Store.Dissect(index), Store.Packets[index], seen);
+
+    /// <summary>Applies a display filter (or, for empty text, none): the packets are tested in the background, on all cores.</summary>
+    private async Task ApplyFilterAsync(string text)
+    {
+        DisplayFilter? filter = null;
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            try { filter = DisplayFilter.Parse(text); }
+            catch (FilterSyntaxException e)
+            {
+                FilterState = FilterState.Invalid;
+                FilterMessage = SyntaxText(e); // the filter applied before stays
+                return;
+            }
+        }
+        _filterRun?.Cancel();
+        _filter = filter;
+        OnPropertyChanged(nameof(IsFiltered));
+        FilterMessage = "";
+        if (filter is null)
+        {
+            IsFiltering = false;
+            ShowRows(_allRows);
+            UpdateStatus();
+            return;
+        }
+
+        var run = _filterRun = new CancellationTokenSource();
+        int count = Store.Packets.Count;
+        var packets = Store.Packets.GetRange(0, count);
+        var streams = Store.Streams.GetRange(0, count);
+        var names = Store.Interfaces.Select(i => i.Name).ToArray();
+        var first = Store.FirstUtc;
+        var matches = new bool[count];
+        var seen = new bool[filter.Fields.Count];
+        _filterDone = 0;
+        _filterTotal = count;
+        IsFiltering = true;
+        try
+        {
+            var options = new ParallelOptions { CancellationToken = run.Token, MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) };
+            await Task.Run(() => Parallel.For(0, count, options, i =>
+            {
+                var p = packets[i];
+                string name = p.InterfaceId >= 0 && p.InterfaceId < names.Length ? names[p.InterfaceId] : "";
+                matches[i] = filter.Matches(Dissector.Dissect(p, i + 1, streams[i], first, name), p, seen);
+                Interlocked.Increment(ref _filterDone);
+            }));
+        }
+        catch (OperationCanceledException)
+        {
+            if (_filterRun == run) IsFiltering = false; // stopped, and nothing else took over
+            return;
+        }
+        if (_filterRun != run) return;
+
+        var shown = new List<PacketRow>();
+        for (int i = 0; i < count; i++)
+            if (matches[i]) shown.Add(_allRows[i]);
+        for (int i = count; i < Store.Packets.Count; i++) // captured while the filter ran
+            if (Passes(i, seen)) shown.Add(_allRows[i]);
+        IsFiltering = false;
+        ShowRows(shown);
+        if (shown.Count == 0 && Store.Packets.Count > 0)
+        {
+            // Nothing passes: say so, and point at a name no packet has (likely misspelt).
+            string? never = filter.Fields.Where((_, k) => !seen[k]).FirstOrDefault();
+            FilterMessage = never is not null ? Loc.Instance.Format("cap.filter.unknownField", never) : Loc.Instance["cap.filter.none"];
+        }
+        UpdateStatus();
+    }
+
+    /// <summary>Shows these rows, keeping the selected packet when it is among them.</summary>
+    private void ShowRows(IReadOnlyList<PacketRow> rows)
+    {
+        var keep = Selected;
+        Rows = new ObservableCollection<PacketRow>(rows);
+        OnPropertyChanged(nameof(Rows));
+        if (keep is not null && rows.Contains(keep))
+        {
+            _selected = null; // the list let go of it when its items changed; select it again
+            Selected = keep;
+            ScrollToSelectedRequested?.Invoke();
+        }
+        else if (!IsCapturing) Selected = Rows.FirstOrDefault();
+    }
+
+    private void UseFilter(string? text, FilterJoin join)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        string combined = join switch
+        {
+            FilterJoin.Not => $"!({text})",
+            FilterJoin.And when FilterState == FilterState.Valid => $"({FilterText.Trim()}) && {text}",
+            _ => text,
+        };
+        FilterText = combined;
+        _ = ApplyFilterAsync(combined);
+    }
+
+    private string? FilterOf(object? parameter) => (parameter as DetailNode ?? SelectedNode)?.Node is { } node ? DisplayFilter.For(node) : null;
+
+    /// <summary>"Only this conversation": its TCP or UDP stream, or else the two addresses.</summary>
+    private string? ConversationFilter(PacketRow row)
+    {
+        var stream = Store.Streams[row.Index];
+        if (stream.TcpStream >= 0) return $"tcp.stream == {stream.TcpStream}";
+        if (stream.UdpStream >= 0) return $"udp.stream == {stream.UdpStream}";
+        var packet = Store.Packets[row.Index];
+        var h = QuickHeader.Read(packet.Link, packet.Data);
+        if (h.IsIp)
+        {
+            string field = h.IpVersion == 4 ? "ip.addr" : "ipv6.addr";
+            return $"{field} == {h.Source.ToAddress()} && {field} == {h.Destination.ToAddress()}";
+        }
+        if (packet.Link == LinkType.Ethernet && packet.Data.Length >= 12)
+            return $"eth.addr == {DisplayFilter.WriteValue(packet.Data[..6])} && eth.addr == {DisplayFilter.WriteValue(packet.Data[6..12])}";
+        return null;
+    }
+
+    private static string SyntaxText(FilterSyntaxException e) =>
+        Loc.Instance.Format("cap.filter.error." + e.Error, e.Position + 1, e.Near);
 
     private async Task StopAsync(string? note = null)
     {
@@ -597,12 +841,23 @@ public sealed class CaptureViewModel : ObservableObject
 
     private void Replace(CaptureStore loaded)
     {
+        _filterRun?.Cancel();
+        _filterRun = null;
+        IsFiltering = false;
         Selected = null;
         Store.TakeOver(loaded);
-        Rows = new ObservableCollection<PacketRow>(Enumerable.Range(0, Store.Packets.Count).Select(i => new PacketRow(Store, i)));
-        OnPropertyChanged(nameof(Rows));
+        _allRows.Clear();
+        _allRows.AddRange(Enumerable.Range(0, Store.Packets.Count).Select(i => new PacketRow(Store, i)));
         OnPropertyChanged(nameof(HasPackets));
-        Selected = Rows.FirstOrDefault();
+        if (_filter is null)
+        {
+            ShowRows(_allRows); // and the first packet selected
+            return;
+        }
+        // The filter applied stays applied, as in Wireshark: the new packets go through it first.
+        Rows = new ObservableCollection<PacketRow>();
+        OnPropertyChanged(nameof(Rows));
+        _ = ApplyFilterAsync(_filter.Text);
     }
 
     private void Save()
@@ -683,16 +938,21 @@ public sealed class CaptureViewModel : ObservableObject
         var loc = Loc.Instance;
         var culture = loc.Culture;
         if (IsStarting) return; // "waiting for Windows" stays until it is answered
+        // With a display filter: how far it got, or how many packets it shows.
+        string filtered = _filter is null ? ""
+            : IsFiltering ? loc.Format("cap.filter.busy", _filterTotal == 0 ? 100 : (int)((long)Volatile.Read(ref _filterDone) * 100 / _filterTotal))
+            : loc.Format("cap.filter.shown", Rows.Count.ToString("N0", culture));
+        string text;
         if (IsCapturing)
         {
             var elapsed = DateTime.UtcNow - _startedUtc;
-            string text = loc.Format("cap.live.status", _liveName, Store.Packets.Count.ToString("N0", culture),
+            text = loc.Format("cap.live.status", _liveName, Store.Packets.Count.ToString("N0", culture),
                 SizeFormatter.Format(Store.Bytes, culture), elapsed.TotalHours >= 1 ? elapsed.ToString(@"h\:mm\:ss") : elapsed.ToString(@"m\:ss"));
             long dropped = _session?.Connection.Dropped ?? 0;
             if (dropped > 0) text += " · " + loc.Format("cap.live.dropped", dropped.ToString("N0", culture));
-            StatusText = text;
         }
-        else StatusText = Store.Packets.Count == 0 ? "" : loc.Format("cap.status", Store.Packets.Count.ToString("N0", culture), SizeFormatter.Format(Store.Bytes, culture));
+        else text = Store.Packets.Count == 0 ? "" : loc.Format("cap.status", Store.Packets.Count.ToString("N0", culture), SizeFormatter.Format(Store.Bytes, culture));
+        StatusText = filtered.Length > 0 && text.Length > 0 ? text + " · " + filtered : text;
         CommandManager.InvalidateRequerySuggested();
     }
 
@@ -717,6 +977,7 @@ public sealed class CaptureViewModel : ObservableObject
     public void Relocalize()
     {
         UpdateStatus();
+        OnPropertyChanged(nameof(Presets));
         if (IsIdle && Adapters.Count > 0 && ReplayFile is null && !_sampleMode) _ = RefreshAdaptersAsync(); // "All adapters" in the new language
     }
 
