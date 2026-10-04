@@ -192,6 +192,9 @@ public sealed class AdapterChoice
     /// <summary>This PC's addresses on it, to tell which end of a packet is this PC.</summary>
     public IReadOnlyList<IPAddress> Addresses { get; init; } = Array.Empty<IPAddress>();
 
+    /// <summary>The adapters among them that Windows' packet capture doesn't cover (tunnels): raw sockets capture there.</summary>
+    public IReadOnlyList<string> Uncovered { get; init; } = Array.Empty<string>();
+
     public override string ToString() => Name;
 }
 
@@ -520,16 +523,24 @@ public sealed class CaptureViewModel : ObservableObject
             SetAdapters(new[] { new AdapterChoice { Name = Loc.Instance.Format("cap.replay", Path.GetFileName(replay)), Ids = new[] { "replay" } } });
             return;
         }
-        IReadOnlyList<NetworkAdapter> adapters;
-        try { adapters = await Task.Run(NetworkAdapters.Read); }
+        List<NetworkAdapter> usable;
+        IReadOnlySet<string> uncovered;
+        try
+        {
+            (usable, uncovered) = await Task.Run(() =>
+            {
+                var up = NetworkAdapters.Read().Where(a => a.IsUp && (a.IPv4.Count > 0 || a.IPv6.Count > 0)).ToList();
+                return (up, NdisCaptureSource.Uncovered(up.Select(a => a.Id)));
+            });
+        }
         catch (System.Net.NetworkInformation.NetworkInformationException) { return; }
-        var usable = adapters.Where(a => a.IsUp && (a.IPv4.Count > 0 || a.IPv6.Count > 0)).ToList();
         var choices = usable.Select(a => new AdapterChoice
         {
             Name = a.Name,
             Description = a.IPv4.Count > 0 ? $"{a.Description} · {a.IPv4[0].Address}" : a.Description,
             Ids = new[] { a.Id },
             Addresses = Own(a).ToList(),
+            Uncovered = uncovered.Contains(a.Id) ? new[] { a.Name } : Array.Empty<string>(),
         }).ToList();
         if (usable.Count > 1)
             choices.Add(new AdapterChoice
@@ -538,6 +549,7 @@ public sealed class CaptureViewModel : ObservableObject
                 Description = Loc.Instance.Format("cap.allAdapters.count", usable.Count),
                 Ids = usable.Select(a => a.Id).ToList(),
                 Addresses = usable.SelectMany(Own).ToList(),
+                Uncovered = usable.Where(a => uncovered.Contains(a.Id)).Select(a => a.Name).ToList(),
             });
         if (IsIdle) SetAdapters(choices);
 
@@ -572,11 +584,20 @@ public sealed class CaptureViewModel : ObservableObject
         try
         {
             string backend = ReplayFile is not null ? HelperRequest.ReplayBackend
-                : Npcap.Installed ? HelperRequest.NpcapBackend : HelperRequest.RawSocketBackend;
-            var (session, error) = await OpenSessionAsync(backend, choice);
-            // Npcap there but not working (an old or broken install): Windows' own way instead.
-            if (session is null && error?.Code == "NpcapFailed")
-                (session, error) = await OpenSessionAsync(HelperRequest.RawSocketBackend, choice);
+                : Npcap.Installed ? HelperRequest.NpcapBackend : HelperRequest.NdisCapBackend;
+            bool elevate = NeedsElevation(backend, choice);
+            var (session, error) = await OpenSessionAsync(backend, elevate, choice);
+            // Npcap used without administrator rights but not working (an old or broken install): Windows' own
+            // capture instead. A helper that has the rights tries the other ways by itself.
+            if (session is null && backend == HelperRequest.NpcapBackend && !elevate && error?.Code != "Cancelled")
+            {
+                backend = HelperRequest.NdisCapBackend;
+                elevate = NeedsElevation(backend, choice);
+                (session, error) = await OpenSessionAsync(backend, elevate, choice);
+            }
+            // Started without administrator rights (the account may trace) and turned down all the same: with them.
+            if (session is null && !elevate && error?.Code == "NeedAdmin" && backend != HelperRequest.ReplayBackend)
+                (session, error) = await OpenSessionAsync(backend, elevate: true, choice);
             if (session is null)
             {
                 Note = ErrorText(error);
@@ -591,14 +612,20 @@ public sealed class CaptureViewModel : ObservableObject
         }
     }
 
-    private Task<(CaptureSession? Session, HelperError? Error)> OpenSessionAsync(string backend, AdapterChoice choice)
+    /// <summary>
+    /// Whether this way of capturing needs the helper started with administrator rights (a UAC prompt). Windows' own
+    /// capture doesn't for members of Performance Log Users, unless raw sockets have to help it out on a tunnel.
+    /// </summary>
+    private static bool NeedsElevation(string backend, AdapterChoice choice) => backend switch
     {
-        bool elevate = backend switch
-        {
-            HelperRequest.RawSocketBackend => !IsElevated.Value,
-            HelperRequest.NpcapBackend => Npcap.AdminOnly && !IsElevated.Value,
-            _ => false,
-        };
+        HelperRequest.NdisCapBackend => !EtwSession.CanStart || (choice.Uncovered.Count > 0 && !IsElevated.Value),
+        HelperRequest.RawSocketBackend => !IsElevated.Value,
+        HelperRequest.NpcapBackend => Npcap.AdminOnly && !IsElevated.Value,
+        _ => false,
+    };
+
+    private Task<(CaptureSession? Session, HelperError? Error)> OpenSessionAsync(string backend, bool elevate, AdapterChoice choice)
+    {
         StatusText = Loc.Instance[elevate ? "cap.waitingAdmin" : "cap.starting"];
         var request = new HelperRequest { Backend = backend, Adapters = choice.Ids.ToList(), File = ReplayFile };
         // A file played back isn't this PC's traffic: no programs to name.
@@ -623,7 +650,13 @@ public sealed class CaptureViewModel : ObservableObject
         RaiseHasPackets();
         _liveName = choice.Name;
         FileName = "";
-        Note = "";
+        // The way chosen couldn't start and another took over: why, and which. Or raw sockets help out on tunnels.
+        var hello = session.Connection.Hello!;
+        Note = hello.Fallback is { } passed
+            ? ErrorText(passed) + " " + Loc.Instance.Format("cap.note.fallback", Loc.Instance["cap.backend." + hello.Backend])
+            : hello.Backend == HelperRequest.NdisCapBackend && choice.Uncovered.Count > 0
+                ? Loc.Instance.Format("cap.note.uncovered", string.Join(Loc.Instance["hw.listSeparator"], choice.Uncovered))
+                : "";
         _unsaved = false;
         _startedUtc = DateTime.UtcNow;
         IsCapturing = true;
@@ -885,6 +918,8 @@ public sealed class CaptureViewModel : ObservableObject
         }
         finally
         {
+            // A helper ended by force leaves Windows capturing; done here, not later, so it can't stop the next capture.
+            if (session.Connection.Hello?.Backend == HelperRequest.NdisCapBackend) NdisCaptureSource.StopLeftover();
             _session = null;
             _isStopping = false;
             IsCapturing = false;

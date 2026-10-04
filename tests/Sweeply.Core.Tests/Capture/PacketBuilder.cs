@@ -146,6 +146,31 @@ internal static class PacketBuilder
         to.AddRange(body);
     }
 
+    public static readonly byte[] AccessPoint = { 0x00, 0x00, 0x5E, 0x00, 0x53, 0x0A };
+
+    /// <summary>
+    /// An 802.11 data frame as a Wi-Fi card hands it over (decrypted, LLC/SNAP before the payload): sent to the access
+    /// point, or coming from it. To the AP the addresses are BSS Id, source, destination; from it destination, BSS Id, source.
+    /// </summary>
+    public static byte[] Wifi(bool toAccessPoint, byte[] destination, byte[] source, int etherType, byte[] payload, bool qos = true, bool noData = false)
+    {
+        var frame = new List<byte>();
+        int subtype = (qos ? 8 : 0) | (noData ? 4 : 0);
+        frame.Add((byte)(2 << 2 | subtype << 4));
+        frame.Add((byte)(toAccessPoint ? 1 : 2));
+        frame.AddRange(new byte[] { 0x2C, 0x00 }); // duration: 44 µs
+        frame.AddRange(toAccessPoint ? AccessPoint : destination);
+        frame.AddRange(toAccessPoint ? source : AccessPoint);
+        frame.AddRange(toAccessPoint ? destination : source);
+        frame.AddRange(new byte[] { 0x10, 0x00 }); // sequence 1, fragment 0
+        if (qos) frame.AddRange(new byte[] { 0x00, 0x00 });
+        if (noData) return frame.ToArray();
+        frame.AddRange(new byte[] { 0xAA, 0xAA, 0x03, 0, 0, 0 });
+        frame.AddRange(U16((ushort)etherType));
+        frame.AddRange(payload);
+        return frame.ToArray();
+    }
+
     public static byte[] U16(ushort value) => new[] { (byte)(value >> 8), (byte)value };
 
     public static byte[] Concat(params byte[][] parts) => parts.SelectMany(p => p).ToArray();

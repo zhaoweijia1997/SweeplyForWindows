@@ -183,15 +183,138 @@ public static partial class Dissector
                 break;
             }
             case LinkType.Ieee80211:
-                c.D.Layer("wlan", "IEEE 802.11 wireless LAN (not decoded here)", 0, data.Length);
-                c.D.Protocol = "802.11";
-                c.D.Info = "802.11 frame";
+                Wlan(c);
                 break;
             default:
                 c.D.Layer("data", $"Link-layer type {(int)c.Packet.Link} (not decoded here)", 0, data.Length);
                 c.D.Info = $"Link-layer type {(int)c.Packet.Link}";
                 break;
         }
+    }
+
+    /// <summary>
+    /// An 802.11 frame as a Wi-Fi card hands it over (Windows' packet capture does, already decrypted): the MAC header,
+    /// whose addresses mean different things by the "to/from distribution system" bits, then for data frames
+    /// LLC/SNAP and what it carries. Management and control frames only come in monitor mode; they are named.
+    /// </summary>
+    private static void Wlan(Context c)
+    {
+        var data = c.Data;
+        var layer = c.D.Layer("wlan", "IEEE 802.11", 0, Math.Min(24, data.Length));
+        if (!Need(c, layer, 0, 2, data.Length, "802.11 frame control")) return;
+        int type = (data[0] >> 2) & 3, subtype = data[0] >> 4, flags = data[1];
+        int typeSubtype = type << 4 | subtype;
+        string kind = WlanKind(type, subtype), flagText = WlanFlags(flags);
+        c.D.Protocol = "802.11";
+        // As Wireshark: the sequence and fragment numbers (control frames have none) and the flags; a data frame's
+        // contents write over it.
+        c.D.Info = type != 1 && data.Length >= 24
+            ? $"{kind}, SN={BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(22)) >> 4}, FN={data[22] & 0xF}, Flags={flagText}"
+            : $"{kind}, Flags={flagText}";
+        if (type != 2)
+        {
+            c.D.Layers[^1] = layer = new ProtoNode($"IEEE 802.11 {kind}, Flags: {flagText}", "wlan", true, 0, data.Length) { IsLayer = true };
+            layer.AddField("wlan.fc.type_subtype", "Type/Subtype", typeSubtype, 0, 1, $"{kind} ({Format.Hex16(typeSubtype)})");
+            return;
+        }
+        bool toDs = (flags & 1) != 0, fromDs = (flags & 2) != 0, qos = (subtype & 8) != 0, order = (flags & 0x80) != 0;
+        int header = 24 + (toDs && fromDs ? 6 : 0) + (qos ? 2 : 0) + (qos && order ? 4 : 0);
+        if (!Need(c, layer, 0, header, data.Length, "802.11 header")) return;
+
+        // Which address is which: 1 receiver, 2 transmitter; destination, source and the access point by the DS bits.
+        int daAt, saAt, bssidAt;
+        (daAt, saAt, bssidAt) = (toDs, fromDs) switch
+        {
+            (false, false) => (4, 10, 16),
+            (true, false) => (16, 10, 4),
+            (false, true) => (4, 16, 10),
+            _ => (16, 24, -1), // between access points: no BSS Id
+        };
+        var destination = Bytes(data, daAt, 6);
+        bool broadcast = destination.All(b => b == 0xFF);
+        c.Broadcast = (destination[0] & 1) != 0;
+        string destinationText = broadcast ? "Broadcast" : Format.Mac(destination);
+        c.LinkSource = Format.Mac(data.AsSpan(saAt, 6));
+        c.LinkDestination = destinationText;
+
+        c.D.Layers[^1] = layer = new ProtoNode($"IEEE 802.11 {kind}, Flags: {flagText}", "wlan", true, 0, header) { IsLayer = true };
+        layer.AddField("wlan.fc.type_subtype", "Type/Subtype", typeSubtype, 0, 1, $"{kind} ({Format.Hex16(typeSubtype)})");
+        var flagNode = layer.AddField("wlan.flags", "Flags", flags, 1, 1, Format.Hex8(flags));
+        string ds = (toDs, fromDs) switch
+        {
+            (false, false) => "Not leaving DS or network is operating in AD-HOC mode (To DS: 0 From DS: 0)",
+            (true, false) => "Frame from STA to DS via an AP (To DS: 1 From DS: 0)",
+            (false, true) => "Frame from DS to a STA via AP(To DS: 0 From DS: 1)",
+            _ => "WDS (AP to AP) or Mesh (MP to MP) Frame (To DS: 1 From DS: 1)",
+        };
+        flagNode.Add(new ProtoNode(Format.Bits(flags, 0x03, 8, "DS status", ds), "wlan.fc.ds", flags & 3, 1, 1));
+        flagNode.Add(new ProtoNode(Format.Bits(flags, 0x08, 8, "Retry", (flags & 0x08) != 0 ? "Frame is being retransmitted" : "Frame is not being retransmitted"), "wlan.fc.retry", (flags & 0x08) != 0, 1, 1));
+        flagNode.Add(new ProtoNode(Format.Bits(flags, 0x40, 8, "Protected flag", (flags & 0x40) != 0 ? "Data is protected" : "Data is not protected"), "wlan.fc.protected", (flags & 0x40) != 0, 1, 1));
+        int duration = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(2));
+        layer.AddField("wlan.duration", "Duration", duration, 2, 2, $"{duration} microseconds");
+        layer.AddField("wlan.ra", "Receiver address", Bytes(data, 4, 6), 4, 6);
+        layer.AddField("wlan.ta", "Transmitter address", Bytes(data, 10, 6), 10, 6);
+        layer.AddField("wlan.da", "Destination address", destination, daAt, 6, broadcast ? $"Broadcast ({Format.Mac(destination)})" : destinationText);
+        layer.AddField("wlan.sa", "Source address", Bytes(data, saAt, 6), saAt, 6);
+        if (bssidAt >= 0) layer.AddField("wlan.bssid", "BSS Id", Bytes(data, bssidAt, 6), bssidAt, 6);
+        int sequence = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(22));
+        layer.AddField("wlan.frag", "Fragment number", sequence & 0xF, 22, 2);
+        layer.AddField("wlan.seq", "Sequence number", sequence >> 4, 22, 2);
+        if (qos)
+        {
+            int qosAt = 24 + (toDs && fromDs ? 6 : 0);
+            layer.AddField("wlan.qos.tid", "TID", data[qosAt] & 0xF, qosAt, 2);
+        }
+        if ((subtype & 4) != 0) return; // Null function: no body (power saving signals only)
+
+        int at = header;
+        if (data.Length >= at + 8 && data[at] == 0xAA && data[at + 1] == 0xAA && data[at + 2] == 0x03)
+        {
+            int etherType = U16(data, at + 6);
+            int oui = data[at + 3] << 16 | data[at + 4] << 8 | data[at + 5];
+            var llc = c.D.Layer("llc", "Logical-Link Control", at, 8);
+            llc.AddField("llc.dsap", "DSAP", 0xAA, at, 1, "SNAP (0xaa)");
+            llc.AddField("llc.ssap", "SSAP", 0xAA, at + 1, 1, "SNAP (0xaa)");
+            llc.AddField("llc.control", "Control field", 3, at + 2, 1, "U, func=UI (0x03)");
+            llc.AddField("llc.oui", "Organization Code", oui, at + 3, 3, oui == 0 ? "Encapsulated Ethernet (0x000000)" : $"0x{oui:x6}");
+            llc.AddField("llc.type", "Type", etherType, at + 6, 2, $"{EtherTypeName(etherType)} ({Format.Hex16(etherType)})");
+            EtherPayload(c, etherType, at + 8, llc);
+        }
+        else if (data.Length > at) Llc(c, at, data.Length);
+    }
+
+    private static string WlanKind(int type, int subtype) => (type, subtype) switch
+    {
+        (0, 0) => "Association Request",
+        (0, 1) => "Association Response",
+        (0, 4) => "Probe Request",
+        (0, 5) => "Probe Response",
+        (0, 8) => "Beacon frame",
+        (0, 10) => "Disassociate",
+        (0, 11) => "Authentication",
+        (0, 12) => "Deauthentication",
+        (0, 13) => "Action",
+        (1, 11) => "Request-to-send",
+        (1, 12) => "Clear-to-send",
+        (1, 13) => "Acknowledgement",
+        (1, 9) => "802.11 Block Ack",
+        (2, 0) => "Data",
+        (2, 4) => "Null function (No data)",
+        (2, 8) => "QoS Data",
+        (2, 12) => "QoS Null function (No data)",
+        (0, _) => "Management frame",
+        (1, _) => "Control frame",
+        (2, _) => "Data",
+        _ => "Extension frame",
+    };
+
+    /// <summary>"...PR..T" as Wireshark writes the flags: order, protected, more data, power management, retry, more fragments, from DS, to DS.</summary>
+    private static string WlanFlags(int flags)
+    {
+        const string letters = "opmPRMFT";
+        var text = new char[8];
+        for (int i = 0; i < 8; i++) text[i] = (flags & (0x80 >> i)) != 0 ? letters[i] : '.';
+        return new string(text);
     }
 
     private static string SllPacketType(int type) => type switch

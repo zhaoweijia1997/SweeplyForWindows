@@ -96,6 +96,8 @@ public partial class App : Application
             return;
         }
         _instance = instance;
+        // A capture whose helper was ended by force (with the app, say) left Windows capturing.
+        _ = Task.Run(Sweeply.Core.Capture.NdisCaptureSource.StopLeftover);
 
         // The app lives in the notification area; closing the window does not end it (unless turned off).
         ShutdownMode = ShutdownMode.OnExplicitShutdown;

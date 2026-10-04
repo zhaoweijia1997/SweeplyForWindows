@@ -30,10 +30,10 @@ public enum HelperMessage : byte
 public sealed record HelperRequest
 {
     public const string CaptureMode = "capture";
-    public const string RawSocketBackend = "RawSocket", NpcapBackend = "Npcap", ReplayBackend = "Replay";
+    public const string NdisCapBackend = "NdisCap", RawSocketBackend = "RawSocket", NpcapBackend = "Npcap", ReplayBackend = "Replay";
 
     public string Mode { get; init; } = CaptureMode;
-    public string Backend { get; init; } = RawSocketBackend;
+    public string Backend { get; init; } = NdisCapBackend;
 
     /// <summary>Which network adapters (<see cref="Monitoring.NetworkAdapter.Id"/>).</summary>
     public List<string> Adapters { get; init; } = new();
@@ -45,7 +45,8 @@ public sealed record HelperRequest
     public bool RealTime { get; init; } = true;
 }
 
-public sealed record HelperHello(string Backend, List<CaptureInterface> Interfaces);
+/// <summary>The helper is capturing: which way, on which interfaces, and (<paramref name="Fallback"/>) why a better way couldn't be used.</summary>
+public sealed record HelperHello(string Backend, List<CaptureInterface> Interfaces, HelperError? Fallback = null);
 
 /// <summary>Why capturing failed: a code the app turns into words (see the cap.error.* strings), and what Windows said.</summary>
 public sealed record HelperError(string Code, string Detail);

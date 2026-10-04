@@ -68,7 +68,8 @@ public static class HelperHost
                 await TrySendAsync(pipe, HelperProtocol.EncodeJson(HelperMessage.Error, early), cancel);
                 return;
             }
-            if (!await TrySendAsync(pipe, HelperProtocol.EncodeJson(HelperMessage.Hello, new HelperHello(source.Backend, source.Interfaces.ToList())), cancel))
+            var hello = new HelperHello(source.Backend, source.Interfaces.ToList(), (source as FallbackSource)?.Note);
+            if (!await TrySendAsync(pipe, HelperProtocol.EncodeJson(HelperMessage.Hello, hello), cancel))
                 return;
 
             using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancel);

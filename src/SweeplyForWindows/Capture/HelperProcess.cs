@@ -62,6 +62,18 @@ internal static class HelperProcess
             .Where(a => a.IsUp && request.Adapters.Contains(a.Id, StringComparer.OrdinalIgnoreCase))
             .ToList();
         if (adapters.Count == 0) throw new HelperException("NoAdapter");
-        return request.Backend == HelperRequest.NpcapBackend ? new NpcapSource(adapters) : new RawSocketSource(adapters);
+        // When a way can't start, the next one takes over: Npcap, then Windows' own packet capture, then raw sockets.
+        // Adapters Windows' capture doesn't cover (tunnels) get raw sockets alongside it.
+        var uncovered = NdisCaptureSource.Uncovered(adapters.Select(a => a.Id));
+        IPacketSource Ndis() => uncovered.Count == 0 ? new NdisCaptureSource(adapters)
+            : uncovered.Count == adapters.Count ? Raw()
+            : new CombinedSource(new NdisCaptureSource(adapters, skip: uncovered), new RawSocketSource(adapters, only: uncovered));
+        IPacketSource Raw() => new RawSocketSource(adapters);
+        return request.Backend switch
+        {
+            HelperRequest.NpcapBackend => new FallbackSource(() => new NpcapSource(adapters), Ndis, Raw),
+            HelperRequest.RawSocketBackend => Raw(),
+            _ => new FallbackSource(Ndis, Raw),
+        };
     }
 }

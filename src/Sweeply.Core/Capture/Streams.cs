@@ -128,6 +128,17 @@ public struct QuickHeader
                 }
                 return -1;
             }
+            case LinkType.Ieee80211:
+            {
+                // A data frame with a body: the MAC header (longer with four addresses, QoS, HT control), then LLC/SNAP.
+                if (data.Length < 24) return -1;
+                int type = (data[0] >> 2) & 3, subtype = data[0] >> 4, flags = data[1];
+                if (type != 2 || (subtype & 4) != 0) return -1;
+                bool qos = (subtype & 8) != 0;
+                int at = 24 + ((flags & 3) == 3 ? 6 : 0) + (qos ? 2 : 0) + (qos && (flags & 0x80) != 0 ? 4 : 0);
+                if (data.Length < at + 8 || data[at] != 0xAA || data[at + 1] != 0xAA || data[at + 2] != 0x03) return -1;
+                return BinaryPrimitives.ReadUInt16BigEndian(data.AsSpan(at + 6)) is 0x0800 or 0x86DD ? at + 8 : -1;
+            }
             case LinkType.LinuxSll:
                 return data.Length >= 16 && BinaryPrimitives.ReadUInt16BigEndian(data.AsSpan(14)) is 0x0800 or 0x86DD ? 16 : -1;
             case LinkType.LinuxSll2:
