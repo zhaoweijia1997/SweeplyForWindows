@@ -23,7 +23,7 @@ shows you exactly what they are, and never deletes anything until you choose to.
   <img src="docs/screenshots/clean-en-light.png" width="760" alt="SweeplyForWindows showing cleanup categories and their sizes">
 </p>
 
-> **Status: preview (0.3).** Cleaning, undo, the "Never clean" list, the folder right-click menu,
+> **Status: preview (0.4).** Cleaning, undo, the "Never clean" list, the folder right-click menu,
 > clean-up reminders, Clean up every day, Disk space, the Monitor page, background mode and the
 > activity monitor all work.
 
