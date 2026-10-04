@@ -109,7 +109,7 @@ public enum ProblemKind
 /// <summary>A kind of trouble in the capture: how often, the first packet with it, and the filter that shows them all.</summary>
 public sealed record Problem(ProblemKind Kind, int Count, int FirstFrame, string Filter);
 
-/// <summary>Packets and bytes per step of time, from the first packet on; also split by direction where known.</summary>
+/// <summary>Packets and bytes per step of time (10 ms to hours, so there are enough points), from the first packet on; also split by direction where known.</summary>
 public sealed class TrafficSeries
 {
     public required TimeSpan Step { get; init; }
@@ -129,12 +129,14 @@ public sealed class CaptureStatistics
 {
     private static readonly TimeSpan[] Steps =
     {
-        TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(15),
+        TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(50), TimeSpan.FromMilliseconds(100),
+        TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(15),
         TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(10),
         TimeSpan.FromMinutes(15), TimeSpan.FromMinutes(30), TimeSpan.FromHours(1), TimeSpan.FromHours(2), TimeSpan.FromHours(6),
     };
 
-    public const int MaxSteps = 300;
+    /// <summary>Points of the traffic series at most: the step is the finest one that keeps to this.</summary>
+    public const int MaxPoints = 150;
 
     public int Packets { get; private init; }
     public long Bytes { get; private init; }
@@ -234,8 +236,8 @@ public sealed class CaptureStatistics
         var last = first;
         foreach (var p in packets)
             if (p.TimestampUtc > last) last = p.TimestampUtc;
-        var step = Steps.FirstOrDefault(s => (last - first).Ticks / s.Ticks < MaxSteps, Steps[^1]);
-        int buckets = (int)Math.Min(MaxSteps, (last - first).Ticks / step.Ticks + 1);
+        var step = Steps.FirstOrDefault(s => (last - first).Ticks / s.Ticks < MaxPoints, Steps[^1]);
+        int buckets = (int)Math.Min(MaxPoints, (last - first).Ticks / step.Ticks + 1);
         var traffic = new TrafficSeries { Step = step, Packets = new long[buckets], Bytes = new long[buckets], BytesOut = new long[buckets], BytesIn = new long[buckets] };
 
         var root = new ProtocolShare { Name = "frame" };

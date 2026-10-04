@@ -179,6 +179,66 @@
             </Setter>
         </Style>
 
+        <!-- Lists with column headers. This theme's list template has none, so the GridView one is used, in the theme's colours;
+             its corner between the scroll bars is see-through instead of a light square on the dark theme. -->
+        <Style TargetType="GridViewColumnHeader" BasedOn="{StaticResource {x:Type GridViewColumnHeader}}">
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}"/>
+        </Style>
+        <ControlTemplate x:Key="GridListTemplate" TargetType="ListView">
+            <Border BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" CornerRadius="4">
+                <Border.Resources>
+                    <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="Transparent"/>
+                </Border.Resources>
+                <ScrollViewer Style="{DynamicResource {x:Static GridView.GridViewScrollViewerStyleKey}}" Focusable="False"
+                              CanContentScroll="True" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                    <ItemsPresenter/>
+                </ScrollViewer>
+            </Border>
+        </ControlTemplate>
+        <!-- A row whose cells line up under the headers (this theme's row template doesn't). -->
+        <Style x:Key="GridRow" TargetType="ListViewItem">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListViewItem">
+                        <Border Background="{TemplateBinding Background}" MinHeight="26">
+                            <Grid>
+                                <Border x:Name="Mark" Background="{DynamicResource AccentFillColorDefaultBrush}" Opacity="0"/>
+                                <GridViewRowPresenter Columns="{TemplateBinding GridView.ColumnCollection}" Content="{TemplateBinding Content}"
+                                                      VerticalAlignment="Center" Margin="0,2"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Mark" Property="Opacity" Value="0.10"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Mark" Property="Opacity" Value="0.25"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="GridList" TargetType="ListView">
+            <Setter Property="Template" Value="{StaticResource GridListTemplate}"/>
+            <Setter Property="ItemContainerStyle" Value="{StaticResource GridRow}"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="SelectionMode" Value="Single"/>
+            <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True"/>
+            <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling"/>
+        </Style>
+
         <!-- A value that copies itself when clicked: looks like plain text. -->
         <Style x:Key="CopyButton" TargetType="Button">
             <Setter Property="Cursor" Value="Hand"/>
@@ -1237,6 +1297,11 @@
                         <StackPanel Margin="32,26,32,8">
                             <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [cap.title], Source={x:Static loc:Loc.Instance}}"/>
                             <TextBlock Style="{StaticResource Secondary}" Margin="0,6,0,0" Text="{Binding [cap.subtitle], Source={x:Static loc:Loc.Instance}}"/>
+                            <ListBox Margin="-14,8,0,0" Style="{StaticResource SectionStrip}" SelectedIndex="{Binding ViewIndex}"
+                                     Visibility="{Binding HasPackets, Converter={StaticResource TrueVisibility}}">
+                                <ListBoxItem Content="{Binding [cap.view.packets], Source={x:Static loc:Loc.Instance}}"/>
+                                <ListBoxItem Content="{Binding [cap.view.stats], Source={x:Static loc:Loc.Instance}}"/>
+                            </ListBox>
                         </StackPanel>
 
                         <StackPanel Grid.Row="1" Margin="32,0,32,8">
@@ -1402,34 +1467,12 @@
                         </Border>
 
                         <!-- The packet list -->
-                        <ListView x:Name="PacketList" Grid.Row="2" Margin="32,0,32,0" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}"
+                        <ListView x:Name="PacketList" Grid.Row="2" Margin="32,0,32,0" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}" Template="{StaticResource GridListTemplate}"
                                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                                   VirtualizingPanel.ScrollUnit="Item" ScrollViewer.IsDeferredScrollingEnabled="False"
                                   FontSize="12.5" Typography.NumeralAlignment="Tabular" SelectionMode="Single"
                                   BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                                  Visibility="{Binding HasPackets, Converter={StaticResource TrueVisibility}}">
-                            <!-- This theme's list template has no column headers: the GridView one, with the theme's colours. -->
-                            <ListView.Template>
-                                <ControlTemplate TargetType="ListView">
-                                    <Border BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
-                                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" CornerRadius="4">
-                                        <ScrollViewer Style="{DynamicResource {x:Static GridView.GridViewScrollViewerStyleKey}}" Focusable="False"
-                                                      CanContentScroll="True" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                                            <ItemsPresenter/>
-                                        </ScrollViewer>
-                                    </Border>
-                                </ControlTemplate>
-                            </ListView.Template>
-                            <ListView.Resources>
-                                <Style TargetType="GridViewColumnHeader" BasedOn="{StaticResource {x:Type GridViewColumnHeader}}">
-                                    <Setter Property="HorizontalContentAlignment" Value="Left"/>
-                                    <Setter Property="Padding" Value="6,4"/>
-                                    <Setter Property="FontWeight" Value="SemiBold"/>
-                                    <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}"/>
-                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                    <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}"/>
-                                </Style>
-                            </ListView.Resources>
+                                  Visibility="{Binding ShowPackets, Converter={StaticResource TrueVisibility}}">
                             <ListView.ItemContainerStyle>
                                 <Style TargetType="ListViewItem">
                                     <Setter Property="Background" Value="{Binding Background}"/>
@@ -1469,6 +1512,8 @@
                                                 <MenuItem Header="{Binding [cap.copyBytes], Source={x:Static loc:Loc.Instance}}"
                                                           Command="{Binding PlacementTarget.Tag.CopyBytesCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
                                                 <Separator/>
+                                                <MenuItem Header="{Binding [cap.follow], Source={x:Static loc:Loc.Instance}}"
+                                                          Command="{Binding PlacementTarget.Tag.FollowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
                                                 <MenuItem Header="{Binding [cap.filter.conversation], Source={x:Static loc:Loc.Instance}}"
                                                           Command="{Binding PlacementTarget.Tag.ConversationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
                                                 <MenuItem Header="{Binding [cap.filter.program], Source={x:Static loc:Loc.Instance}}"
@@ -1494,13 +1539,13 @@
                         </ListView>
 
                         <GridSplitter Grid.Row="3" Height="7" HorizontalAlignment="Stretch" Margin="32,0" Background="Transparent" ResizeBehavior="PreviousAndNext"
-                                      Visibility="{Binding HasPackets, Converter={StaticResource TrueVisibility}}"/>
+                                      Visibility="{Binding ShowPackets, Converter={StaticResource TrueVisibility}}"/>
 
                         <!-- The selected packet's details -->
                         <TreeView x:Name="PacketDetails" Grid.Row="4" Margin="32,0,32,0" ItemsSource="{Binding Details}" FontSize="12.5"
                                   BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
                                   VirtualizingPanel.IsVirtualizing="True"
-                                  Visibility="{Binding HasPackets, Converter={StaticResource TrueVisibility}}">
+                                  Visibility="{Binding ShowPackets, Converter={StaticResource TrueVisibility}}">
                             <TreeView.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="{Binding [cap.filter.asFilter], Source={x:Static loc:Loc.Instance}}" Command="{Binding FilterNodeCommand}"/>
@@ -1539,14 +1584,265 @@
                         </TreeView>
 
                         <GridSplitter Grid.Row="5" Height="7" HorizontalAlignment="Stretch" Margin="32,0" Background="Transparent" ResizeBehavior="PreviousAndNext"
-                                      Visibility="{Binding HasPackets, Converter={StaticResource TrueVisibility}}"/>
+                                      Visibility="{Binding ShowPackets, Converter={StaticResource TrueVisibility}}"/>
 
                         <!-- The selected packet's bytes -->
                         <Border Grid.Row="6" Margin="32,0,32,0" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="0,4"
                                 Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                                Visibility="{Binding HasPackets, Converter={StaticResource TrueVisibility}}">
+                                Visibility="{Binding ShowPackets, Converter={StaticResource TrueVisibility}}">
                             <cap:HexView Bytes="{Binding Bytes}" HighlightStart="{Binding HighlightStart}" HighlightLength="{Binding HighlightLength}"
                                          ByteClickedCommand="{Binding ByteClickedCommand}" HorizontalAlignment="Left"/>
+                        </Border>
+
+                        <!-- Statistics: what the packets add up to (worked out when this view opens) -->
+                        <Border Grid.Row="2" Grid.RowSpan="5" Margin="32,0,32,0" Visibility="{Binding ShowStatistics, Converter={StaticResource TrueVisibility}}">
+                            <Grid DataContext="{Binding Statistics}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <CheckBox Margin="0,0,12,0" VerticalAlignment="Center" IsChecked="{Binding OnlyShown}"
+                                                  Content="{Binding [cap.stats.onlyShown], Source={x:Static loc:Loc.Instance}}"
+                                                  Visibility="{Binding DataContext.IsFiltered, ElementName=CapturePage, Converter={StaticResource TrueVisibility}}"/>
+                                        <Button Padding="12,5" Command="{Binding RefreshCommand}" Content="{Binding [cap.stats.refresh], Source={x:Static loc:Loc.Instance}}"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Header}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        <ProgressBar Width="120" IsIndeterminate="True" Margin="12,0,0,0" VerticalAlignment="Center"
+                                                     Visibility="{Binding IsComputing, Converter={StaticResource TrueVisibility}}"/>
+                                        <TextBlock Style="{StaticResource Secondary}" Margin="8,0,0,0" Text="{Binding ProgressText}" VerticalAlignment="Center"
+                                                   Visibility="{Binding IsComputing, Converter={StaticResource TrueVisibility}}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <ListBox Grid.Row="1" Margin="-14,6,0,6" Style="{StaticResource SectionStrip}" SelectedIndex="{Binding SectionIndex}">
+                                    <ListBoxItem Content="{Binding [cap.stats.section.overview], Source={x:Static loc:Loc.Instance}}"/>
+                                    <ListBoxItem Content="{Binding [cap.stats.section.programs], Source={x:Static loc:Loc.Instance}}"/>
+                                    <ListBoxItem Content="{Binding [cap.stats.section.conversations], Source={x:Static loc:Loc.Instance}}"/>
+                                    <ListBoxItem Content="{Binding [cap.stats.section.endpoints], Source={x:Static loc:Loc.Instance}}"/>
+                                    <ListBoxItem Content="{Binding [cap.stats.section.protocols], Source={x:Static loc:Loc.Instance}}"/>
+                                    <ListBoxItem Content="{Binding [cap.stats.section.problems], Source={x:Static loc:Loc.Instance}}"/>
+                                </ListBox>
+
+                                <Grid Grid.Row="2">
+                                    <!-- Overview: the numbers, traffic over time, the busiest programs and the trouble -->
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding SectionIndex, Converter={StaticResource PageVisibility}, ConverterParameter=0}">
+                                        <StackPanel Margin="0,0,0,8">
+                                            <ItemsControl ItemsSource="{Binding Summary}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <UniformGrid Rows="1"/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Style="{StaticResource Card}" Margin="0,0,8,8" Padding="14,10">
+                                                            <StackPanel>
+                                                                <TextBlock Style="{StaticResource Secondary}" FontSize="12" Text="{Binding Label}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                                                                <TextBlock FontSize="18" FontWeight="SemiBold" Text="{Binding Value}" Margin="0,2,0,0" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <Border Style="{StaticResource Card}" Margin="0,0,8,8">
+                                                <StackPanel>
+                                                    <DockPanel>
+                                                        <TextBlock DockPanel.Dock="Right" Style="{StaticResource Secondary}" FontSize="12" Text="{Binding ChartTop}"/>
+                                                        <TextBlock FontWeight="SemiBold" Text="{Binding [cap.stats.traffic], Source={x:Static loc:Loc.Instance}}"/>
+                                                    </DockPanel>
+                                                    <mon:LiveChart Height="140" Margin="0,8,0,4" Points="{Binding Traffic}" Points2="{Binding TrafficOut}"
+                                                                   Maximum="{Binding ChartMax}" WindowSeconds="{Binding ChartWindow}" MaxGapSeconds="1e9"
+                                                                   Stroke="{DynamicResource AccentFillColorDefaultBrush}" GridBrush="{DynamicResource CardStrokeColorDefaultBrush}"/>
+                                                    <DockPanel>
+                                                        <TextBlock DockPanel.Dock="Right" Style="{StaticResource Secondary}" FontSize="12"
+                                                                   Text="{Binding [cap.stats.dashedOut], Source={x:Static loc:Loc.Instance}}"
+                                                                   Visibility="{Binding HasOutbound, Converter={StaticResource TrueVisibility}}"/>
+                                                        <TextBlock Style="{StaticResource Secondary}" FontSize="12" Text="{Binding ChartSpan}"/>
+                                                    </DockPanel>
+                                                </StackPanel>
+                                            </Border>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Border Style="{StaticResource Card}" Margin="0,0,8,8" VerticalAlignment="Top">
+                                                    <StackPanel>
+                                                        <TextBlock FontWeight="SemiBold" Text="{Binding [cap.stats.topPrograms], Source={x:Static loc:Loc.Instance}}"/>
+                                                        <TextBlock Style="{StaticResource Secondary}" Margin="0,6,0,0" FontSize="12.5"
+                                                                   Text="{Binding [cap.stats.noPrograms], Source={x:Static loc:Loc.Instance}}"
+                                                                   Visibility="{Binding HasPrograms, Converter={StaticResource FalseVisibility}}"/>
+                                                        <ItemsControl ItemsSource="{Binding TopPrograms}" Margin="0,6,0,0">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <DockPanel Margin="0,3">
+                                                                        <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Command="{Binding FilterCommand}" Margin="8,0,0,0"
+                                                                                VerticalAlignment="Center" Content="{Binding [cap.stats.only], Source={x:Static loc:Loc.Instance}}"/>
+                                                                        <TextBlock DockPanel.Dock="Right" Style="{StaticResource Secondary}" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                                            <Run Text="↑"/><Run Text="{Binding Sent, Mode=OneWay}"/><Run Text="  ↓"/><Run Text="{Binding Received, Mode=OneWay}"/>
+                                                                        </TextBlock>
+                                                                        <StackPanel>
+                                                                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                                                            <TextBlock Style="{StaticResource Secondary}" FontSize="12" Text="{Binding Hosts}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                                                                       Visibility="{Binding Hosts, Converter={StaticResource TextVisibility}}"/>
+                                                                        </StackPanel>
+                                                                    </DockPanel>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Grid.Column="1" Style="{StaticResource Card}" Margin="0,0,8,8" VerticalAlignment="Top">
+                                                    <StackPanel>
+                                                        <TextBlock FontWeight="SemiBold" Text="{Binding [cap.stats.section.problems], Source={x:Static loc:Loc.Instance}}"/>
+                                                        <TextBlock Style="{StaticResource Secondary}" Margin="0,6,0,0" FontSize="12.5"
+                                                                   Text="{Binding [cap.stats.noProblems], Source={x:Static loc:Loc.Instance}}"
+                                                                   Visibility="{Binding HasProblems, Converter={StaticResource FalseVisibility}}"/>
+                                                        <ItemsControl ItemsSource="{Binding Problems}" Margin="0,6,0,0">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <DockPanel Margin="0,3">
+                                                                        <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Command="{Binding FilterCommand}" Margin="8,0,0,0"
+                                                                                VerticalAlignment="Center" Content="{Binding [cap.stats.only], Source={x:Static loc:Loc.Instance}}"/>
+                                                                        <TextBlock DockPanel.Dock="Right" FontWeight="SemiBold" Text="{Binding Count}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                                                        <TextBlock Text="{Binding What}" ToolTip="{Binding Explanation}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                                    </DockPanel>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </StackPanel>
+                                                </Border>
+                                            </Grid>
+                                        </StackPanel>
+                                    </ScrollViewer>
+
+                                    <!-- Programs -->
+                                    <ListView x:Name="StatsPrograms" Style="{StaticResource GridList}" ItemsSource="{Binding Programs}"
+                                              Visibility="{Binding SectionIndex, Converter={StaticResource PageVisibility}, ConverterParameter=1}">
+                                        <ListView.View>
+                                            <GridView AllowsColumnReorder="False">
+                                                <GridViewColumn Width="80">
+                                                    <GridViewColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <Button Style="{StaticResource LinkButton}" Command="{Binding FilterCommand}" Content="{Binding [cap.stats.only], Source={x:Static loc:Loc.Instance}}"/>
+                                                        </DataTemplate>
+                                                    </GridViewColumn.CellTemplate>
+                                                </GridViewColumn>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.program], Source={x:Static loc:Loc.Instance}}" Width="170" DisplayMemberBinding="{Binding Name}"/>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.packets], Source={x:Static loc:Loc.Instance}}" Width="80" DisplayMemberBinding="{Binding Packets}"/>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.sent], Source={x:Static loc:Loc.Instance}}" Width="90" DisplayMemberBinding="{Binding Sent}"/>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.received], Source={x:Static loc:Loc.Instance}}" Width="90" DisplayMemberBinding="{Binding Received}"/>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.connections], Source={x:Static loc:Loc.Instance}}" Width="70" DisplayMemberBinding="{Binding Connections}"/>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.hosts], Source={x:Static loc:Loc.Instance}}" Width="330" DisplayMemberBinding="{Binding Hosts}"/>
+                                            </GridView>
+                                        </ListView.View>
+                                    </ListView>
+
+                                    <!-- Conversations -->
+                                    <ListView x:Name="StatsConversations" Style="{StaticResource GridList}" ItemsSource="{Binding Conversations}"
+                                              Visibility="{Binding SectionIndex, Converter={StaticResource PageVisibility}, ConverterParameter=2}">
+                                        <ListView.View>
+                                            <GridView AllowsColumnReorder="False">
+                                                <GridViewColumn Width="150">
+                                                    <GridViewColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <Button Style="{StaticResource LinkButton}" Command="{Binding FollowCommand}" Margin="0,0,12,0"
+                                                                        Content="{Binding [cap.follow], Source={x:Static loc:Loc.Instance}}"
+                                                                        Visibility="{Binding CanFollow, Converter={StaticResource TrueVisibility}}"/>
+                                                                <Button Style="{StaticResource LinkButton}" Command="{Binding FilterCommand}" Content="{Binding [cap.stats.only], Source={x:Static loc:Loc.Instance}}"/>
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </GridViewColumn.CellTemplate>
+                                                </GridViewColumn>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.protocol], Source={x:Static loc:Loc.Instance}}" Width="60" DisplayMemberBinding="{Binding Protocol}"/>
+                                                <GridViewColumn Header="A" Width="170" DisplayMemberBinding="{Binding EndA}"/>
+                                                <GridViewColumn Header="B" Width="170" DisplayMemberBinding="{Binding EndB}"/>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.name], Source={x:Static loc:Loc.Instance}}" Width="170" DisplayMemberBinding="{Binding Name}"/>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.packets], Source={x:Static loc:Loc.Instance}}" Width="64" DisplayMemberBinding="{Binding Packets}"/>
+                                                <GridViewColumn Header="A → B" Width="80" DisplayMemberBinding="{Binding AToB}"/>
+                                                <GridViewColumn Header="B → A" Width="80" DisplayMemberBinding="{Binding BToA}"/>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.duration], Source={x:Static loc:Loc.Instance}}" Width="70" DisplayMemberBinding="{Binding Duration}"/>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.program], Source={x:Static loc:Loc.Instance}}" Width="120" DisplayMemberBinding="{Binding Program}"/>
+                                            </GridView>
+                                        </ListView.View>
+                                    </ListView>
+
+                                    <!-- Endpoints -->
+                                    <ListView x:Name="StatsEndpoints" Style="{StaticResource GridList}" ItemsSource="{Binding Endpoints}"
+                                              Visibility="{Binding SectionIndex, Converter={StaticResource PageVisibility}, ConverterParameter=3}">
+                                        <ListView.View>
+                                            <GridView AllowsColumnReorder="False">
+                                                <GridViewColumn Width="80">
+                                                    <GridViewColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <Button Style="{StaticResource LinkButton}" Command="{Binding FilterCommand}" Content="{Binding [cap.stats.only], Source={x:Static loc:Loc.Instance}}"/>
+                                                        </DataTemplate>
+                                                    </GridViewColumn.CellTemplate>
+                                                </GridViewColumn>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.address], Source={x:Static loc:Loc.Instance}}" Width="230" DisplayMemberBinding="{Binding Address}"/>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.name], Source={x:Static loc:Loc.Instance}}" Width="230" DisplayMemberBinding="{Binding Name}"/>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.here], Source={x:Static loc:Loc.Instance}}" Width="70" DisplayMemberBinding="{Binding Here}"/>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.packets], Source={x:Static loc:Loc.Instance}}" Width="80" DisplayMemberBinding="{Binding Packets}"/>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.sent], Source={x:Static loc:Loc.Instance}}" Width="90" DisplayMemberBinding="{Binding Sent}"/>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.received], Source={x:Static loc:Loc.Instance}}" Width="90" DisplayMemberBinding="{Binding Received}"/>
+                                            </GridView>
+                                        </ListView.View>
+                                    </ListView>
+
+                                    <!-- Protocols: the hierarchy, each with its share of the packets -->
+                                    <Border Style="{StaticResource Card}" Padding="8,8" Margin="0,0,0,8"
+                                            Visibility="{Binding SectionIndex, Converter={StaticResource PageVisibility}, ConverterParameter=4}">
+                                        <TreeView x:Name="StatsProtocols" ItemsSource="{Binding Protocols}" BorderThickness="0" Background="Transparent" FontSize="12.5">
+                                            <TreeView.ItemContainerStyle>
+                                                <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                                                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                                                    <Setter Property="Padding" Value="2,1"/>
+                                                </Style>
+                                            </TreeView.ItemContainerStyle>
+                                            <TreeView.ItemTemplate>
+                                                <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding Name}" Width="{Binding NameWidth}" FontFamily="Cascadia Mono, Consolas, Segoe UI" VerticalAlignment="Center"/>
+                                                        <Border Width="80" Height="6" CornerRadius="3" Margin="8,0,8,0" VerticalAlignment="Center"
+                                                                Background="{DynamicResource CardStrokeColorDefaultBrush}">
+                                                            <Border Width="{Binding BarWidth}" HorizontalAlignment="Left" CornerRadius="3" Background="{DynamicResource AccentFillColorDefaultBrush}"/>
+                                                        </Border>
+                                                        <TextBlock Text="{Binding PacketShare}" Width="56" TextAlignment="Right" VerticalAlignment="Center"/>
+                                                        <TextBlock Style="{StaticResource Secondary}" Text="{Binding Packets}" Width="90" TextAlignment="Right" VerticalAlignment="Center"/>
+                                                        <TextBlock Style="{StaticResource Secondary}" Text="{Binding Bytes}" Width="90" TextAlignment="Right" VerticalAlignment="Center"/>
+                                                        <Button Style="{StaticResource LinkButton}" Command="{Binding FilterCommand}" Margin="16,0,0,0" VerticalAlignment="Center"
+                                                                Content="{Binding [cap.stats.only], Source={x:Static loc:Loc.Instance}}"/>
+                                                    </StackPanel>
+                                                </HierarchicalDataTemplate>
+                                            </TreeView.ItemTemplate>
+                                        </TreeView>
+                                    </Border>
+
+                                    <!-- Problems -->
+                                    <ListView x:Name="StatsProblems" Style="{StaticResource GridList}" ItemsSource="{Binding Problems}"
+                                              Visibility="{Binding SectionIndex, Converter={StaticResource PageVisibility}, ConverterParameter=5}">
+                                        <ListView.View>
+                                            <GridView AllowsColumnReorder="False">
+                                                <GridViewColumn Width="80">
+                                                    <GridViewColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <Button Style="{StaticResource LinkButton}" Command="{Binding FilterCommand}" Content="{Binding [cap.stats.only], Source={x:Static loc:Loc.Instance}}"/>
+                                                        </DataTemplate>
+                                                    </GridViewColumn.CellTemplate>
+                                                </GridViewColumn>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.problem], Source={x:Static loc:Loc.Instance}}" Width="190" DisplayMemberBinding="{Binding What}"/>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.count], Source={x:Static loc:Loc.Instance}}" Width="70" DisplayMemberBinding="{Binding Count}"/>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.first], Source={x:Static loc:Loc.Instance}}" Width="80" DisplayMemberBinding="{Binding First}"/>
+                                                <GridViewColumn Header="{Binding [cap.stats.col.why], Source={x:Static loc:Loc.Instance}}" Width="470" DisplayMemberBinding="{Binding Explanation}"/>
+                                            </GridView>
+                                        </ListView.View>
+                                    </ListView>
+                                </Grid>
+                            </Grid>
                         </Border>
 
                         <!-- How many packets; the note on protocol names -->

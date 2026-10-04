@@ -437,6 +437,70 @@ internal static class Snapshot
             window.Close();
         }
 
+        // The Capture page's statistics of the same made-up capture: the overview, conversations and protocols.
+        foreach (var (lang, theme, section, name) in new[]
+                 {
+                     ("en", ThemeMode.Light, StatisticsViewModel.OverviewSection, "capture-stats"),
+                     ("zh-Hans", ThemeMode.Light, StatisticsViewModel.OverviewSection, "capture-stats"),
+                     ("zh-Hans", ThemeMode.Dark, StatisticsViewModel.OverviewSection, "capture-stats"),
+                     ("en", ThemeMode.Light, StatisticsViewModel.ConversationsSection, "capture-conversations"),
+                     ("zh-Hans", ThemeMode.Light, StatisticsViewModel.ConversationsSection, "capture-conversations"),
+                     ("zh-Hans", ThemeMode.Light, StatisticsViewModel.ProtocolsSection, "capture-protocols"),
+                 })
+        {
+            Loc.Instance.SetLanguage(lang);
+            var vm = new MainViewModel(KnownPaths.FromSystem(), new Settings(), new CleanHistory(null));
+            vm.LoadSample();
+            vm.Capture.LoadSample();
+            vm.PageIndex = MainViewModel.CapturePage;
+            vm.Capture.ViewIndex = 1;
+            vm.Capture.Statistics.SectionIndex = section;
+            var window = new MainWindow(vm, scanOnOpen: false)
+            {
+                ThemeMode = theme,
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -32000,
+                Top = -32000,
+                Width = 1280,
+                Height = 820,
+                ShowInTaskbar = false,
+                ShowActivated = false,
+            };
+            window.Show();
+            WaitForAnimations(TimeSpan.FromMilliseconds(1200));
+            Save(window, theme == ThemeMode.Dark, Path.Combine(folder, $"{name}-{lang}-{(theme == ThemeMode.Dark ? "dark" : "light")}.png"));
+            window.Close();
+        }
+
+        // "Follow stream" on the made-up capture's MQTT connection (plain text, so there is something to read).
+        foreach (var (lang, theme) in new[] { ("en", ThemeMode.Light), ("zh-Hans", ThemeMode.Light), ("zh-Hans", ThemeMode.Dark) })
+        {
+            Loc.Instance.SetLanguage(lang);
+            var capture = new CaptureViewModel();
+            capture.LoadSample();
+            var store = capture.Store;
+            int mqtt = Enumerable.Range(0, store.Packets.Count)
+                .Where(i => store.Streams[i].TcpStream >= 0)
+                .Select(i => (i, h: Sweeply.Core.Capture.QuickHeader.Read(store.Packets[i].Link, store.Packets[i].Data)))
+                .First(x => x.h.DestinationPort == 1883 || x.h.SourcePort == 1883).i;
+            var followed = Sweeply.Core.Capture.StreamFollower.Follow(store.Packets, store.Streams, tcp: true, store.Streams[mqtt].TcpStream)!;
+            var follow = new Capture.FollowStreamWindow(new FollowStreamViewModel(followed, null, null, _ => { }))
+            {
+                ThemeMode = theme,
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -32000,
+                Top = -32000,
+                Width = 900,
+                Height = 520,
+                ShowInTaskbar = false,
+                ShowActivated = false,
+            };
+            follow.Show();
+            WaitForAnimations(TimeSpan.FromMilliseconds(600));
+            Save(follow, theme == ThemeMode.Dark, Path.Combine(folder, $"capture-follow-{lang}-{(theme == ThemeMode.Dark ? "dark" : "light")}.png"));
+            follow.Close();
+        }
+
         // The list shown before anything is moved.
         foreach (var lang in new[] { "en", "zh-Hans" })
         {

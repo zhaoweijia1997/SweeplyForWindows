@@ -50,7 +50,7 @@ public sealed class LiveChart : FrameworkElement
         if (GridBrush is Brush grid)
         {
             var gridPen = new Pen(grid, 1);
-            gridPen.Freeze();
+            if (gridPen.CanFreeze) gridPen.Freeze(); // a theme brush (a DynamicResource) can't be frozen
             for (int i = 1; i <= 3; i++)
             {
                 double y = Math.Round(height * i / 4) + 0.5;
@@ -59,9 +59,9 @@ public sealed class LiveChart : FrameworkElement
         }
 
         var line = new Pen(Stroke, 1.6) { LineJoin = PenLineJoin.Round };
-        line.Freeze();
+        if (line.CanFreeze) line.Freeze();
         var dashed = new Pen(Stroke, 1.4) { LineJoin = PenLineJoin.Round, DashStyle = new DashStyle(new[] { 3.0, 2.0 }, 0) };
-        dashed.Freeze();
+        if (dashed.CanFreeze) dashed.Freeze();
         if (Points is { Count: > 1 } points) Draw(dc, points, width, height, line, AreaFill());
         if (Points2 is { Count: > 1 } points2) Draw(dc, points2, width, height, dashed, null);
         dc.Pop();
@@ -69,7 +69,7 @@ public sealed class LiveChart : FrameworkElement
 
     private void Draw(DrawingContext dc, IReadOnlyList<ChartPoint> points, double width, double height, Pen pen, Brush? fill)
     {
-        double window = Math.Max(1, WindowSeconds), min = Minimum, range = Math.Max(1e-9, Maximum - Minimum);
+        double window = Math.Max(1e-6, WindowSeconds), min = Minimum, range = Math.Max(1e-9, Maximum - Minimum); // a capture can last under a second
         Point At(ChartPoint p) => new(
             width * (1 - p.SecondsAgo / window),
             height - 1 - Math.Clamp((p.Value - min) / range, 0, 1) * (height - 2));

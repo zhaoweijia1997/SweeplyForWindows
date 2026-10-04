@@ -43,6 +43,7 @@ public partial class MainWindow : Window
         {
             if (PacketList.Items.Count > 0) PacketList.ScrollIntoView(PacketList.Items[PacketList.Items.Count - 1]);
         };
+        viewModel.Capture.FollowRequested += follow => new Capture.FollowStreamWindow(follow) { Owner = this }.Show();
         viewModel.Capture.ScrollToSelectedRequested += () =>
         {
             if (viewModel.Capture.Selected is { } row) Dispatcher.BeginInvoke(() => PacketList.ScrollIntoView(row), DispatcherPriority.Background);

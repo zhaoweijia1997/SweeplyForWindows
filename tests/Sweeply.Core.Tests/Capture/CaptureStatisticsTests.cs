@@ -53,8 +53,12 @@ public class CaptureStatisticsTests
         Assert.Equal(packets.Sum(p => (long)p.Length), stats.Bytes);
         Assert.Equal(TimeSpan.FromSeconds(2), stats.Duration);
         Assert.Equal(8, stats.PacketsWithProgram);
-        Assert.Equal(TimeSpan.FromSeconds(1), stats.Traffic.Step);
-        Assert.Equal(new long[] { 6, 2, 1 }, stats.Traffic.Packets);
+        // Two seconds in steps of 20 ms: the finest step that keeps to 150 points.
+        Assert.Equal(TimeSpan.FromMilliseconds(20), stats.Traffic.Step);
+        Assert.Equal(101, stats.Traffic.Packets.Length);
+        Assert.Equal((2L, 1L, 3L, 1L, 1L, 1L), (stats.Traffic.Packets[0], stats.Traffic.Packets[1], stats.Traffic.Packets[2],
+            stats.Traffic.Packets[75], stats.Traffic.Packets[76], stats.Traffic.Packets[100]));
+        Assert.Equal(9, stats.Traffic.Packets.Sum());
         Assert.Equal(stats.Bytes, stats.Traffic.Bytes.Sum());
         Assert.Equal(packets.Where(p => p.Direction == PacketDirection.Outbound).Sum(p => (long)p.Length), stats.Traffic.BytesOut.Sum());
     }

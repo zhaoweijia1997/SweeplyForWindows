@@ -236,6 +236,8 @@ public sealed class CaptureViewModel : ObservableObject
 
     private enum FilterJoin { Only, Not, And }
 
+    private int _viewIndex;
+
     public CaptureViewModel()
     {
         OpenCommand = new RelayCommand(_ => { if (PickOpenFile?.Invoke() is string path) _ = OpenAsync(path); }, () => !IsLoading && IsIdle);
@@ -271,8 +273,14 @@ public sealed class CaptureViewModel : ObservableObject
             if ((p as PacketRow ?? Selected) is { Program.Length: > 0 } row)
                 UseFilter($"{DisplayFilter.ProcessName} == {DisplayFilter.Quote(row.Program)}", FilterJoin.Only);
         });
+        FollowCommand = new RelayCommand(async p => { if ((p as PacketRow ?? Selected) is { } row) await FollowAsync(row); });
         _timer.Tick += (_, _) => Pump();
         _filterProgress.Tick += (_, _) => UpdateStatus();
+        Statistics = new StatisticsViewModel(StatisticsSnapshot, text =>
+        {
+            UseFilter(text, FilterJoin.Only);
+            ViewIndex = 0;
+        }, FollowStreamAsync);
     }
 
     public CaptureStore Store { get; } = new();
@@ -329,6 +337,31 @@ public sealed class CaptureViewModel : ObservableObject
     public bool IsWaiting => IsLoading || IsStarting || IsCapturing;
 
     public bool HasPackets => Store.Packets.Count > 0;
+
+    /// <summary>0: the packets (list, details, bytes); 1: the statistics.</summary>
+    public int ViewIndex
+    {
+        get => _viewIndex;
+        set
+        {
+            if (!SetField(ref _viewIndex, value)) return;
+            OnPropertyChanged(nameof(ShowPackets));
+            OnPropertyChanged(nameof(ShowStatistics));
+            if (value == 1 && HasPackets && Statistics.IsStale(Store.Packets.Count)) _ = Statistics.ComputeAsync();
+        }
+    }
+
+    public bool ShowPackets => HasPackets && ViewIndex == 0;
+    public bool ShowStatistics => HasPackets && ViewIndex == 1;
+
+    public StatisticsViewModel Statistics { get; }
+
+    private void RaiseHasPackets()
+    {
+        OnPropertyChanged(nameof(HasPackets));
+        OnPropertyChanged(nameof(ShowPackets));
+        OnPropertyChanged(nameof(ShowStatistics));
+    }
 
     /// <summary>The adapters that can be captured on (connected, with an address), and "all of them".</summary>
     public ObservableCollection<AdapterChoice> Adapters { get; } = new();
@@ -404,6 +437,10 @@ public sealed class CaptureViewModel : ObservableObject
     public ICommand AndNodeCommand { get; }
     public ICommand ConversationCommand { get; }
     public ICommand ProgramFilterCommand { get; }
+    public ICommand FollowCommand { get; }
+
+    /// <summary>Raised with a followed stream for the window to show.</summary>
+    public event Action<FollowStreamViewModel>? FollowRequested;
 
     /// <summary>The display filter being typed; it applies on Enter (or Apply).</summary>
     public string FilterText
@@ -572,6 +609,7 @@ public sealed class CaptureViewModel : ObservableObject
     private void Begin(CaptureSession session, AdapterChoice choice)
     {
         _session = session;
+        Statistics.Clear();
         _filterRun?.Cancel(); // the filter stays; it applies to the new packets as they come
         _filterRun = null;
         IsFiltering = false;
@@ -582,7 +620,7 @@ public sealed class CaptureViewModel : ObservableObject
         _allRows.Clear();
         Rows = new ObservableCollection<PacketRow>();
         OnPropertyChanged(nameof(Rows));
-        OnPropertyChanged(nameof(HasPackets));
+        RaiseHasPackets();
         _liveName = choice.Name;
         FileName = "";
         Note = "";
@@ -639,7 +677,7 @@ public sealed class CaptureViewModel : ObservableObject
         if (added > 0)
         {
             _unsaved = true;
-            if (wasEmpty) OnPropertyChanged(nameof(HasPackets));
+            if (wasEmpty) RaiseHasPackets();
             if (shown > 0 && AutoScroll) ScrollToEndRequested?.Invoke();
         }
         return full;
@@ -766,6 +804,67 @@ public sealed class CaptureViewModel : ObservableObject
         return null;
     }
 
+    /// <summary>Puts the packet's TCP or UDP stream back together (in the background) and asks for a window to show it.</summary>
+    private async Task FollowAsync(PacketRow row)
+    {
+        var info = Store.Streams[row.Index];
+        bool tcp = info.TcpStream >= 0;
+        int number = tcp ? info.TcpStream : info.UdpStream;
+        if (number < 0)
+        {
+            Note = Loc.Instance["cap.follow.none"];
+            return;
+        }
+        await FollowStreamAsync(tcp, number);
+    }
+
+    private async Task FollowStreamAsync(bool tcp, int number)
+    {
+        try
+        {
+            await FollowStreamCoreAsync(tcp, number);
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            Note = Loc.Instance.Format("cap.error.Failed", e.Message); // never silently: the click would seem to do nothing
+        }
+    }
+
+    private async Task FollowStreamCoreAsync(bool tcp, int number)
+    {
+        int count = Store.Packets.Count;
+        var packets = Store.Packets.GetRange(0, count);
+        var streams = Store.Streams.GetRange(0, count);
+        var followed = await Task.Run(() => StreamFollower.Follow(packets, streams, tcp, number));
+        if (followed is null) return;
+
+        // The server name the connection asked for (TLS or HTTP), from its first packets: it names the end asked.
+        string? nameA = null, nameB = null;
+        int looked = 0;
+        for (int i = 0; i < count && looked < 30; i++)
+        {
+            if ((tcp ? streams[i].TcpStream : streams[i].UdpStream) != number) continue;
+            looked++;
+            var host = Store.Dissect(i).Fields().FirstOrDefault(n => n.Field is "tls.handshake.extensions_server_name" or "http.host")?.Value as string;
+            if (string.IsNullOrEmpty(host)) continue;
+            var h = QuickHeader.Read(packets[i].Link, packets[i].Data);
+            if (h.Destination.ToAddress().Equals(followed.AddressB)) nameB = host;
+            else nameA = host;
+            break;
+        }
+        FollowRequested?.Invoke(new FollowStreamViewModel(followed, nameA, nameB, text => UseFilter(text, FilterJoin.Only)));
+    }
+
+    /// <summary>The packets for the statistics: all of them, or only those the filter shows (their stream numbers stay as they are).</summary>
+    private (IReadOnlyList<CapturedPacket>, IReadOnlyList<StreamInfo>, IReadOnlyList<string>) StatisticsSnapshot(bool onlyShown)
+    {
+        var interfaces = Store.Interfaces.Select(i => i.Name).ToList();
+        if (onlyShown && _filter is not null)
+            return (Rows.Select(r => Store.Packets[r.Index]).ToList(), Rows.Select(r => Store.Streams[r.Index]).ToList(), interfaces);
+        int count = Store.Packets.Count;
+        return (Store.Packets.GetRange(0, count), Store.Streams.GetRange(0, count), interfaces);
+    }
+
     private static string SyntaxText(FilterSyntaxException e) =>
         Loc.Instance.Format("cap.filter.error." + e.Error, e.Position + 1, e.Near);
 
@@ -791,6 +890,7 @@ public sealed class CaptureViewModel : ObservableObject
             IsCapturing = false;
             FileName = _liveName;
             UpdateStatus();
+            if (ViewIndex == 1 && HasPackets) _ = Statistics.ComputeAsync();
         }
     }
 
@@ -824,6 +924,7 @@ public sealed class CaptureViewModel : ObservableObject
                 return (read, built);
             });
             Replace(store);
+            if (ViewIndex == 1) _ = Statistics.ComputeAsync();
             FileName = Path.GetFileName(path);
             Note = file.Truncated ? Loc.Instance.Format("cap.truncated", file.Packets.Count) : "";
             _unsaved = false;
@@ -841,6 +942,7 @@ public sealed class CaptureViewModel : ObservableObject
 
     private void Replace(CaptureStore loaded)
     {
+        Statistics.Clear();
         _filterRun?.Cancel();
         _filterRun = null;
         IsFiltering = false;
@@ -848,7 +950,7 @@ public sealed class CaptureViewModel : ObservableObject
         Store.TakeOver(loaded);
         _allRows.Clear();
         _allRows.AddRange(Enumerable.Range(0, Store.Packets.Count).Select(i => new PacketRow(Store, i)));
-        OnPropertyChanged(nameof(HasPackets));
+        RaiseHasPackets();
         if (_filter is null)
         {
             ShowRows(_allRows); // and the first packet selected
@@ -978,6 +1080,7 @@ public sealed class CaptureViewModel : ObservableObject
     {
         UpdateStatus();
         OnPropertyChanged(nameof(Presets));
+        Statistics.Relocalize();
         if (IsIdle && Adapters.Count > 0 && ReplayFile is null && !_sampleMode) _ = RefreshAdaptersAsync(); // "All adapters" in the new language
     }
 
