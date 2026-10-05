@@ -224,7 +224,7 @@ public sealed class MainViewModel : ObservableObject
     public Func<IntPtr>? OwnerHandle { get; set; }
 
     /// <summary>Page numbers, in the order of the navigation list.</summary>
-    public const int CleanPage = 0, SpacePage = 1, MonitorPage = 2, CapturePage = 3, SettingsPage = 4, SupportPage = 5, AboutPage = 6;
+    public const int CleanPage = 0, SpacePage = 1, MonitorPage = 2, CapturePage = 3, BehaviorPage = 4, SettingsPage = 5, SupportPage = 6, AboutPage = 7;
 
     /// <summary>The Space page: what takes up the space on a drive or in a folder.</summary>
     public SpaceViewModel Space { get; }
@@ -234,6 +234,9 @@ public sealed class MainViewModel : ObservableObject
 
     /// <summary>The Capture page: packets, as Wireshark shows them.</summary>
     public CaptureViewModel Capture { get; } = new();
+
+    /// <summary>The Behaviour page: what a program does while it runs.</summary>
+    public BehaviorViewModel Behavior { get; } = new();
 
     /// <summary>"--open-capture &lt;file&gt;" or a file dropped on the window: the Capture page with that file.</summary>
     public void OpenCapture(string path)
@@ -247,7 +250,9 @@ public sealed class MainViewModel : ObservableObject
         get => _pageIndex;
         set
         {
-            if (SetField(ref _pageIndex, value) && value == CapturePage) Capture.OnShown();
+            if (!SetField(ref _pageIndex, value)) return;
+            if (value == CapturePage) Capture.OnShown();
+            else if (value == BehaviorPage) Behavior.OnShown();
         }
     }
 
@@ -872,6 +877,7 @@ public sealed class MainViewModel : ObservableObject
         Space.Relocalize();
         Monitor.Relocalize();
         Capture.Relocalize();
+        Behavior.Relocalize();
         OnAllPropertiesChanged();
     }
 

@@ -25,11 +25,21 @@ public sealed class BehaviorJob : IHelperJob
     private long _events;
     private int _disposed;
 
-    /// <param name="launched">The app has just started it, suspended: it has started nothing yet.</param>
-    public BehaviorJob(int processId, bool launched)
+    /// <summary>A running process with what it started, or (<see cref="HelperRequest.LaunchedBy"/>) a program the app is about to start.</summary>
+    public BehaviorJob(HelperRequest request)
     {
-        _initial = launched ? new List<int> { processId } : TrackedProcesses.WithDescendants(processId, Running()).ToList();
-        _tracked = new TrackedProcesses(_initial);
+        if (request.LaunchedBy > 0 && request.Program is { Length: > 0 } program)
+        {
+            _initial = new List<int>();
+            _tracked = new TrackedProcesses(_initial);
+            _tracked.Await(request.LaunchedBy, Path.GetFileName(program));
+        }
+        else
+        {
+            if (request.ProcessId <= 0) throw new HelperException("Failed", "no process to record");
+            _initial = TrackedProcesses.WithDescendants(request.ProcessId, Running()).ToList();
+            _tracked = new TrackedProcesses(_initial);
+        }
         _reader = new KernelEventReader(_tracked, pid => ProcessDetails.CommandLine(pid) ?? "");
     }
 

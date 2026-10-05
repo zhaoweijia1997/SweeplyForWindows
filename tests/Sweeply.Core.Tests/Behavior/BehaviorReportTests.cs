@@ -29,6 +29,20 @@ public class BehaviorReportTests
     }
 
     [Fact]
+    public void A_program_about_to_start_is_known_by_who_starts_it_and_its_file_name()
+    {
+        var tracked = new TrackedProcesses(Array.Empty<int>());
+        tracked.Await(50, "setup.exe");
+        Assert.False(tracked.Started(60, 50, @"\Device\HarddiskVolume3\Windows\System32\conhost.exe"));
+        Assert.False(tracked.Started(70, 99, @"\Device\HarddiskVolume3\Tools\setup.exe")); // started by someone else
+        Assert.True(tracked.Started(80, 50, @"\Device\HarddiskVolume3\Tools\SETUP.EXE"));
+        Assert.Equal(80, tracked.Arrived);
+        Assert.True(tracked.Started(90, 80, @"\Device\HarddiskVolume3\Tools\helper.exe"));
+        Assert.False(tracked.Started(100, 50, @"\Device\HarddiskVolume3\Tools\setup.exe")); // only the first one
+        Assert.Equal(2, tracked.Running);
+    }
+
+    [Fact]
     public void A_running_program_is_taken_with_what_it_started_after_it()
     {
         var processes = new[]

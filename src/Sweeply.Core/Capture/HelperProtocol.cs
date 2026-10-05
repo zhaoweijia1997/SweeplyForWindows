@@ -47,11 +47,16 @@ public sealed record HelperRequest
     /// <summary>For <see cref="ReplayBackend"/>: keep the original gaps between packets (up to half a second), or go as fast as possible.</summary>
     public bool RealTime { get; init; } = true;
 
-    /// <summary>For <see cref="BehaviorMode"/>: the process to record, with every process it starts.</summary>
+    /// <summary>For <see cref="BehaviorMode"/>: the running process to record, with what it started and every process it starts.</summary>
     public int ProcessId { get; init; }
 
-    /// <summary>For <see cref="BehaviorMode"/>: the app has just started it, suspended; otherwise it was running, with what it had started.</summary>
-    public bool Launched { get; init; }
+    /// <summary>
+    /// For <see cref="BehaviorMode"/>, instead of <see cref="ProcessId"/>: the app (this process id) is about to start the
+    /// program <see cref="Program"/> once the helper says Hello; it is recorded from its very start.
+    /// </summary>
+    public int LaunchedBy { get; init; }
+
+    public string? Program { get; init; }
 }
 
 /// <summary>

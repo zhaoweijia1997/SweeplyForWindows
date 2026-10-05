@@ -56,7 +56,7 @@ internal static class HelperProcess
     private static IHelperJob CreateJob(HelperRequest request) => request.Mode switch
     {
         HelperRequest.CaptureMode => new PacketJob(CreateSource(request)),
-        HelperRequest.BehaviorMode => new Sweeply.Core.Behavior.BehaviorJob(request.ProcessId, request.Launched),
+        HelperRequest.BehaviorMode => new Sweeply.Core.Behavior.BehaviorJob(request),
         _ => throw new HelperException("Failed", "unknown mode: " + request.Mode),
     };
 

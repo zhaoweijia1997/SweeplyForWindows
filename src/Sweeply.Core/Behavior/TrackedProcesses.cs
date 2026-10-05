@@ -8,6 +8,7 @@ namespace Sweeply.Core.Behavior;
 public sealed class TrackedProcesses
 {
     private readonly HashSet<int> _running;
+    private (int Parent, string FileName)? _awaited;
 
     public TrackedProcesses(IEnumerable<int> processIds) => _running = new HashSet<int>(processIds);
 
@@ -21,10 +22,26 @@ public sealed class TrackedProcesses
     /// <summary>The ones running now (a copy).</summary>
     public List<int> Ids() => _running.ToList();
 
-    /// <summary>A process started: recorded too when its parent is. True when it is.</summary>
-    public bool Started(int processId, int parentId)
+    /// <summary>
+    /// Waits for a program about to be started: the first process <paramref name="parentId"/> starts from a file named
+    /// <paramref name="fileName"/> ("setup.exe") is recorded, from its very start.
+    /// </summary>
+    public void Await(int parentId, string fileName) => _awaited = (parentId, fileName);
+
+    /// <summary>The program waited for (<see cref="Await"/>) has started: its id, once it has.</summary>
+    public int? Arrived { get; private set; }
+
+    /// <summary>A process started: recorded too when its parent is, or when it is the program waited for. True when it is.</summary>
+    public bool Started(int processId, int parentId, string image = "")
     {
-        if (!_running.Contains(parentId) || processId == parentId) return false;
+        if (processId == parentId) return false;
+        if (_awaited is { } awaited && parentId == awaited.Parent
+            && Path.GetFileName(image).Equals(awaited.FileName, StringComparison.OrdinalIgnoreCase))
+        {
+            _awaited = null;
+            Arrived = processId;
+        }
+        else if (!_running.Contains(parentId)) return false;
         if (_running.Add(processId)) Seen++;
         return true;
     }

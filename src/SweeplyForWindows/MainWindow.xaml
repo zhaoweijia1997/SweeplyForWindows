@@ -408,6 +408,15 @@
                 </ListBoxItem>
                 <ListBoxItem Padding="10,9">
                     <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource NavGlyph}" Text="&#xE81C;"/>
+                        <TextBlock Text="{Binding [nav.behavior], Source={x:Static loc:Loc.Instance}}" Margin="14,0,0,0"/>
+                        <Ellipse Width="8" Height="8" Margin="8,1,0,0" VerticalAlignment="Center" Fill="{DynamicResource SystemFillColorCriticalBrush}"
+                                 Visibility="{Binding Behavior.IsRecording, Converter={StaticResource TrueVisibility}}"
+                                 ToolTip="{Binding [beh.recordingNow], Source={x:Static loc:Loc.Instance}}"/>
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem Padding="10,9">
+                    <StackPanel Orientation="Horizontal">
                         <TextBlock Style="{StaticResource NavGlyph}" Text="&#xE713;"/>
                         <TextBlock Text="{Binding [nav.settings], Source={x:Static loc:Loc.Instance}}" Margin="14,0,0,0"/>
                     </StackPanel>
@@ -1858,9 +1867,292 @@
                     </Grid>
                 </Grid>
 
+                <!-- ===== Behaviour ===== -->
+                <Grid Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=4}">
+                    <Grid x:Name="BehaviorPage" DataContext="{Binding Behavior}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Margin="32,26,32,8">
+                            <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [beh.title], Source={x:Static loc:Loc.Instance}}"/>
+                            <TextBlock Style="{StaticResource Secondary}" Margin="0,6,0,0" TextWrapping="Wrap" MaxWidth="900" HorizontalAlignment="Left"
+                                       Text="{Binding [beh.subtitle], Source={x:Static loc:Loc.Instance}}"/>
+                        </StackPanel>
+
+                        <!-- What to record, how, and Start / Stop -->
+                        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="32,0,32,8">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton x:Name="BehaviorRunningMode" GroupName="BehaviorTarget" IsChecked="{Binding RunningMode}" IsEnabled="{Binding IsIdle}"
+                                                 Content="{Binding [beh.target.running], Source={x:Static loc:Loc.Instance}}"/>
+                                    <RadioButton x:Name="BehaviorLaunchMode" GroupName="BehaviorTarget" IsChecked="{Binding LaunchMode}" IsEnabled="{Binding IsIdle}" Margin="24,0,0,0"
+                                                 Content="{Binding [beh.target.launch], Source={x:Static loc:Loc.Instance}}"/>
+                                </StackPanel>
+                                <DockPanel Margin="0,8,0,0" Visibility="{Binding RunningMode, Converter={StaticResource TrueVisibility}}">
+                                    <Button DockPanel.Dock="Right" Margin="8,0,0,0" Padding="12,5" Command="{Binding RefreshCommand}"
+                                            Content="{Binding [beh.refresh], Source={x:Static loc:Loc.Instance}}"/>
+                                    <ComboBox x:Name="BehaviorProcess" ItemsSource="{Binding Processes}" SelectedItem="{Binding SelectedProcess}" IsEnabled="{Binding IsIdle}"
+                                              MaxDropDownHeight="420" AutomationProperties.Name="{Binding [beh.target.running], Source={x:Static loc:Loc.Instance}}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Image Source="{Binding Icon}" Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding Description}" Margin="10,0,0,0" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                               MaxWidth="520" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </DockPanel>
+                                <Grid Margin="0,8,0,0" Visibility="{Binding LaunchMode, Converter={StaticResource TrueVisibility}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="240"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid>
+                                        <TextBox x:Name="BehaviorProgram" Text="{Binding ProgramPath, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsIdle}"
+                                                 VerticalContentAlignment="Center" AutomationProperties.Name="{Binding [beh.program], Source={x:Static loc:Loc.Instance}}"/>
+                                        <TextBlock Margin="10,0,10,0" VerticalAlignment="Center" IsHitTestVisible="False" TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="{Binding [beh.program], Source={x:Static loc:Loc.Instance}}"
+                                                   Visibility="{Binding ProgramPath, Converter={StaticResource TextVisibility}, ConverterParameter=invert}"/>
+                                    </Grid>
+                                    <Button Grid.Column="1" Margin="8,0,0,0" Padding="12,5" Command="{Binding BrowseCommand}"
+                                            Content="{Binding [beh.browse], Source={x:Static loc:Loc.Instance}}"/>
+                                    <Grid Grid.Column="2" Margin="8,0,0,0">
+                                        <TextBox x:Name="BehaviorArguments" Text="{Binding Arguments, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsIdle}"
+                                                 VerticalContentAlignment="Center" AutomationProperties.Name="{Binding [beh.arguments], Source={x:Static loc:Loc.Instance}}"/>
+                                        <TextBlock Margin="10,0,10,0" VerticalAlignment="Center" IsHitTestVisible="False" TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="{Binding [beh.arguments], Source={x:Static loc:Loc.Instance}}"
+                                                   Visibility="{Binding Arguments, Converter={StaticResource TextVisibility}, ConverterParameter=invert}"/>
+                                    </Grid>
+                                </Grid>
+                                <WrapPanel Margin="0,10,0,0">
+                                    <CheckBox x:Name="BehaviorFull" IsChecked="{Binding FullRecording}" IsEnabled="{Binding IsIdle}" Margin="0,0,24,0"
+                                              Content="{Binding [beh.full], Source={x:Static loc:Loc.Instance}}"/>
+                                    <CheckBox IsChecked="{Binding AutoStop}" Content="{Binding [beh.autostop], Source={x:Static loc:Loc.Instance}}"/>
+                                </WrapPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                    <Button Style="{DynamicResource AccentButtonStyle}" Padding="14,6" Command="{Binding StartCommand}"
+                                            Visibility="{Binding IsRecording, Converter={StaticResource FalseVisibility}}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE7C8;" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding [beh.start], Source={x:Static loc:Loc.Instance}}" Margin="8,0,0,0"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Padding="14,6" Command="{Binding StopCommand}" Visibility="{Binding IsRecording, Converter={StaticResource TrueVisibility}}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE71A;" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource SystemFillColorCriticalBrush}"/>
+                                            <TextBlock Text="{Binding [beh.stop], Source={x:Static loc:Loc.Instance}}" Margin="8,0,0,0"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Margin="8,0,0,0" Padding="14,6" Command="{Binding ExportCommand}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xEDE1;" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding [beh.export], Source={x:Static loc:Loc.Instance}}" Margin="8,0,0,0"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- How it's going, notes, the sections and a filter -->
+                        <StackPanel Grid.Row="2" Margin="32,0,32,6">
+                            <TextBlock Text="{Binding StatusText}" FontWeight="SemiBold" TextWrapping="Wrap"
+                                       Visibility="{Binding StatusText, Converter={StaticResource TextVisibility}}"/>
+                            <TextBlock Style="{StaticResource Secondary}" Text="{Binding Note}" TextWrapping="Wrap" Margin="0,2,0,0"
+                                       Visibility="{Binding Note, Converter={StaticResource TextVisibility}}"/>
+                            <DockPanel Margin="0,6,0,0" Visibility="{Binding HasReport, Converter={StaticResource TrueVisibility}}">
+                                <Grid DockPanel.Dock="Right" Width="280" VerticalAlignment="Center">
+                                    <TextBox x:Name="BehaviorFilter" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center"
+                                             AutomationProperties.Name="{Binding [beh.filter], Source={x:Static loc:Loc.Instance}}"/>
+                                    <TextBlock Margin="10,0,10,0" VerticalAlignment="Center" IsHitTestVisible="False" TextTrimming="CharacterEllipsis" FontSize="12.5"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="{Binding [beh.filter], Source={x:Static loc:Loc.Instance}}"
+                                               Visibility="{Binding FilterText, Converter={StaticResource TextVisibility}, ConverterParameter=invert}"/>
+                                </Grid>
+                                <ListBox Margin="-14,0,0,0" Style="{StaticResource SectionStrip}" SelectedIndex="{Binding SectionIndex}">
+                                    <ListBoxItem Content="{Binding [beh.section.overview], Source={x:Static loc:Loc.Instance}}"/>
+                                    <ListBoxItem Content="{Binding [beh.section.processes], Source={x:Static loc:Loc.Instance}}"/>
+                                    <ListBoxItem Content="{Binding [beh.section.files], Source={x:Static loc:Loc.Instance}}"/>
+                                    <ListBoxItem Content="{Binding [beh.section.registry], Source={x:Static loc:Loc.Instance}}"/>
+                                    <ListBoxItem Content="{Binding [beh.section.network], Source={x:Static loc:Loc.Instance}}"/>
+                                </ListBox>
+                            </DockPanel>
+                        </StackPanel>
+
+                        <Grid Grid.Row="3" Margin="32,0,32,16">
+                            <TextBlock Style="{StaticResource Secondary}" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="2,8,0,0"
+                                       Text="{Binding [beh.empty], Source={x:Static loc:Loc.Instance}}"
+                                       Visibility="{Binding HasReport, Converter={StaticResource FalseVisibility}}"/>
+                            <DockPanel Visibility="{Binding HasReport, Converter={StaticResource TrueVisibility}}">
+                                <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Secondary}" FontSize="12" Text="{Binding MoreText}" Margin="2,4,0,0"
+                                           Visibility="{Binding MoreText, Converter={StaticResource TextVisibility}}"/>
+                                <Grid>
+                                    <!-- Overview: the numbers, then what deserves a look of its own -->
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding SectionIndex, Converter={StaticResource PageVisibility}, ConverterParameter=0}">
+                                        <StackPanel Margin="0,0,0,8">
+                                            <UniformGrid Rows="1">
+                                                <Border Style="{StaticResource Card}" Margin="0,0,8,8" Padding="14,10">
+                                                    <StackPanel>
+                                                        <TextBlock Style="{StaticResource Secondary}" FontSize="12" Text="{Binding [beh.count.processes], Source={x:Static loc:Loc.Instance}}" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock FontSize="18" FontWeight="SemiBold" Text="{Binding ProcessCount}" Margin="0,2,0,0"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Style="{StaticResource Card}" Margin="0,0,8,8" Padding="14,10">
+                                                    <StackPanel>
+                                                        <TextBlock Style="{StaticResource Secondary}" FontSize="12" Text="{Binding [beh.count.files], Source={x:Static loc:Loc.Instance}}" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock FontSize="18" FontWeight="SemiBold" Text="{Binding FileCount}" Margin="0,2,0,0"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Style="{StaticResource Card}" Margin="0,0,8,8" Padding="14,10">
+                                                    <StackPanel>
+                                                        <TextBlock Style="{StaticResource Secondary}" FontSize="12" Text="{Binding [beh.count.registry], Source={x:Static loc:Loc.Instance}}" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock FontSize="18" FontWeight="SemiBold" Text="{Binding RegistryCount}" Margin="0,2,0,0"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Style="{StaticResource Card}" Margin="0,0,8,8" Padding="14,10">
+                                                    <StackPanel>
+                                                        <TextBlock Style="{StaticResource Secondary}" FontSize="12" Text="{Binding [beh.count.addresses], Source={x:Static loc:Loc.Instance}}" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock FontSize="18" FontWeight="SemiBold" Text="{Binding AddressCount}" Margin="0,2,0,0"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Style="{StaticResource Card}" Margin="0,0,0,8" Padding="14,10">
+                                                    <StackPanel>
+                                                        <TextBlock Style="{StaticResource Secondary}" FontSize="12" Text="{Binding [beh.count.names], Source={x:Static loc:Loc.Instance}}" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock FontSize="18" FontWeight="SemiBold" Text="{Binding NameCount}" Margin="0,2,0,0"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </UniformGrid>
+                                            <TextBlock FontWeight="SemiBold" FontSize="14" Margin="2,8,0,8" Text="{Binding [beh.notable.title], Source={x:Static loc:Loc.Instance}}"/>
+                                            <TextBlock Style="{StaticResource Secondary}" Margin="2,0,0,8" TextWrapping="Wrap"
+                                                       Text="{Binding [beh.notable.none], Source={x:Static loc:Loc.Instance}}"
+                                                       Visibility="{Binding NoNotables, Converter={StaticResource TrueVisibility}}"/>
+                                            <ItemsControl ItemsSource="{Binding Notables}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Style="{StaticResource Card}" Margin="0,0,0,6" Padding="14,10">
+                                                            <DockPanel>
+                                                                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Secondary}" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Top">
+                                                                    <Run Text="{Binding Program, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Time, Mode=OneWay}"/>
+                                                                </TextBlock>
+                                                                <StackPanel>
+                                                                    <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource SystemFillColorCautionBrush}" Text="{Binding Kind}"/>
+                                                                    <TextBlock Text="{Binding Target}" TextWrapping="Wrap" Margin="0,2,0,0" FontFamily="Cascadia Mono, Consolas, Segoe UI" FontSize="12.5"/>
+                                                                    <TextBlock Style="{StaticResource Secondary}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap" Text="{Binding Explanation}"/>
+                                                                </StackPanel>
+                                                            </DockPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <TextBlock Style="{StaticResource Secondary}" FontSize="12" Margin="2,4,0,0" TextWrapping="Wrap"
+                                                       Text="{Binding [beh.notable.hint], Source={x:Static loc:Loc.Instance}}"/>
+                                        </StackPanel>
+                                    </ScrollViewer>
+
+                                    <!-- Processes, as a tree -->
+                                    <ListView x:Name="BehaviorProcesses" Style="{StaticResource GridList}" ItemsSource="{Binding ProcessRows}"
+                                              Visibility="{Binding SectionIndex, Converter={StaticResource PageVisibility}, ConverterParameter=1}">
+                                        <ListView.View>
+                                            <GridView AllowsColumnReorder="False">
+                                                <GridViewColumn Header="{Binding [beh.col.program], Source={x:Static loc:Loc.Instance}}" Width="230">
+                                                    <GridViewColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <Border Width="{Binding Indent}"/>
+                                                                <Image Source="{Binding Icon}" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </GridViewColumn.CellTemplate>
+                                                </GridViewColumn>
+                                                <GridViewColumn Header="{Binding [beh.col.pid], Source={x:Static loc:Loc.Instance}}" Width="70" DisplayMemberBinding="{Binding IdText}"/>
+                                                <GridViewColumn Header="{Binding [beh.col.started], Source={x:Static loc:Loc.Instance}}" Width="80" DisplayMemberBinding="{Binding Started}"/>
+                                                <GridViewColumn Header="{Binding [beh.col.ended], Source={x:Static loc:Loc.Instance}}" Width="150" DisplayMemberBinding="{Binding Ended}"/>
+                                                <GridViewColumn Header="{Binding [beh.col.usage], Source={x:Static loc:Loc.Instance}}" Width="360" DisplayMemberBinding="{Binding Usage}"/>
+                                                <GridViewColumn Header="{Binding [beh.col.commandLine], Source={x:Static loc:Loc.Instance}}" Width="480" DisplayMemberBinding="{Binding CommandLine}"/>
+                                            </GridView>
+                                        </ListView.View>
+                                    </ListView>
+
+                                    <!-- Files -->
+                                    <ListView x:Name="BehaviorFiles" Style="{StaticResource GridList}" ItemsSource="{Binding FileRows}"
+                                              Visibility="{Binding SectionIndex, Converter={StaticResource PageVisibility}, ConverterParameter=2}">
+                                        <ListView.View>
+                                            <GridView AllowsColumnReorder="False">
+                                                <GridViewColumn Header="{Binding [beh.col.path], Source={x:Static loc:Loc.Instance}}" Width="560" DisplayMemberBinding="{Binding Path}"/>
+                                                <GridViewColumn Header="{Binding [beh.col.what], Source={x:Static loc:Loc.Instance}}" Width="200" DisplayMemberBinding="{Binding What}"/>
+                                                <GridViewColumn Header="{Binding [beh.col.program], Source={x:Static loc:Loc.Instance}}" Width="170" DisplayMemberBinding="{Binding Programs}"/>
+                                                <GridViewColumn Header="{Binding [beh.col.time], Source={x:Static loc:Loc.Instance}}" Width="80" DisplayMemberBinding="{Binding Time}"/>
+                                            </GridView>
+                                        </ListView.View>
+                                    </ListView>
+
+                                    <!-- Registry -->
+                                    <ListView x:Name="BehaviorRegistry" Style="{StaticResource GridList}" ItemsSource="{Binding RegistryRows}"
+                                              Visibility="{Binding SectionIndex, Converter={StaticResource PageVisibility}, ConverterParameter=3}">
+                                        <ListView.View>
+                                            <GridView AllowsColumnReorder="False">
+                                                <GridViewColumn Header="{Binding [beh.col.key], Source={x:Static loc:Loc.Instance}}" Width="440" DisplayMemberBinding="{Binding Key}"/>
+                                                <GridViewColumn Header="{Binding [beh.col.value], Source={x:Static loc:Loc.Instance}}" Width="150" DisplayMemberBinding="{Binding Value}"/>
+                                                <GridViewColumn Header="{Binding [beh.col.what], Source={x:Static loc:Loc.Instance}}" Width="120" DisplayMemberBinding="{Binding What}"/>
+                                                <GridViewColumn Header="{Binding [beh.col.data], Source={x:Static loc:Loc.Instance}}" Width="300" DisplayMemberBinding="{Binding Data}"/>
+                                                <GridViewColumn Header="{Binding [beh.col.program], Source={x:Static loc:Loc.Instance}}" Width="150" DisplayMemberBinding="{Binding Programs}"/>
+                                                <GridViewColumn Header="{Binding [beh.col.time], Source={x:Static loc:Loc.Instance}}" Width="80" DisplayMemberBinding="{Binding Time}"/>
+                                            </GridView>
+                                        </ListView.View>
+                                    </ListView>
+
+                                    <!-- Network: addresses, then names looked up -->
+                                    <Grid Visibility="{Binding SectionIndex, Converter={StaticResource PageVisibility}, ConverterParameter=4}">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="3*"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="2*"/>
+                                        </Grid.RowDefinitions>
+                                        <ListView x:Name="BehaviorConnections" Style="{StaticResource GridList}" ItemsSource="{Binding ConnectionRows}">
+                                            <ListView.View>
+                                                <GridView AllowsColumnReorder="False">
+                                                    <GridViewColumn Header="{Binding [beh.col.remote], Source={x:Static loc:Loc.Instance}}" Width="230" DisplayMemberBinding="{Binding Remote}"/>
+                                                    <GridViewColumn Header="{Binding [beh.col.host], Source={x:Static loc:Loc.Instance}}" Width="260" DisplayMemberBinding="{Binding Host}"/>
+                                                    <GridViewColumn Header="{Binding [beh.col.protocol], Source={x:Static loc:Loc.Instance}}" Width="70" DisplayMemberBinding="{Binding Protocol}"/>
+                                                    <GridViewColumn Header="{Binding [beh.col.direction], Source={x:Static loc:Loc.Instance}}" Width="80" DisplayMemberBinding="{Binding Direction}"/>
+                                                    <GridViewColumn Header="{Binding [beh.col.count], Source={x:Static loc:Loc.Instance}}" Width="70" DisplayMemberBinding="{Binding Count}"/>
+                                                    <GridViewColumn Header="{Binding [beh.col.program], Source={x:Static loc:Loc.Instance}}" Width="170" DisplayMemberBinding="{Binding Programs}"/>
+                                                    <GridViewColumn Header="{Binding [beh.col.time], Source={x:Static loc:Loc.Instance}}" Width="80" DisplayMemberBinding="{Binding Time}"/>
+                                                </GridView>
+                                            </ListView.View>
+                                        </ListView>
+                                        <TextBlock Grid.Row="1" FontWeight="SemiBold" Margin="2,4,0,6" Text="{Binding [beh.lookups], Source={x:Static loc:Loc.Instance}}"/>
+                                        <ListView x:Name="BehaviorLookups" Grid.Row="2" Style="{StaticResource GridList}" ItemsSource="{Binding LookupRows}">
+                                            <ListView.View>
+                                                <GridView AllowsColumnReorder="False">
+                                                    <GridViewColumn Header="{Binding [beh.col.name], Source={x:Static loc:Loc.Instance}}" Width="300" DisplayMemberBinding="{Binding Name}"/>
+                                                    <GridViewColumn Header="{Binding [beh.col.answers], Source={x:Static loc:Loc.Instance}}" Width="330" DisplayMemberBinding="{Binding Addresses}"/>
+                                                    <GridViewColumn Header="{Binding [beh.col.count], Source={x:Static loc:Loc.Instance}}" Width="70" DisplayMemberBinding="{Binding Count}"/>
+                                                    <GridViewColumn Header="{Binding [beh.col.program], Source={x:Static loc:Loc.Instance}}" Width="170" DisplayMemberBinding="{Binding Programs}"/>
+                                                    <GridViewColumn Header="{Binding [beh.col.time], Source={x:Static loc:Loc.Instance}}" Width="80" DisplayMemberBinding="{Binding Time}"/>
+                                                </GridView>
+                                            </ListView.View>
+                                        </ListView>
+                                    </Grid>
+                                </Grid>
+                            </DockPanel>
+                        </Grid>
+                    </Grid>
+                </Grid>
+
                 <!-- ===== Settings ===== -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,26,32,24"
-                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=4}">
+                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=5}">
                     <StackPanel MaxWidth="820" HorizontalAlignment="Left">
                         <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [settings.title], Source={x:Static loc:Loc.Instance}}"/>
 
@@ -2029,7 +2321,7 @@
 
                 <!-- ===== Support ===== -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,26,32,24"
-                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=5}">
+                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=6}">
                     <StackPanel MaxWidth="820" HorizontalAlignment="Left">
                         <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [support.title], Source={x:Static loc:Loc.Instance}}"/>
                         <TextBlock Margin="0,14,0,0" TextWrapping="Wrap" FontSize="14"
@@ -2070,7 +2362,7 @@
 
                 <!-- ===== About ===== -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,26,32,24"
-                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=6}">
+                              Visibility="{Binding PageIndex, Converter={StaticResource PageVisibility}, ConverterParameter=7}">
                     <StackPanel MaxWidth="720" HorizontalAlignment="Left">
                         <TextBlock Style="{StaticResource PageTitle}" Text="{Binding [about.title], Source={x:Static loc:Loc.Instance}}"/>
                         <Border Style="{StaticResource Card}" Margin="0,18,0,0" Padding="20">

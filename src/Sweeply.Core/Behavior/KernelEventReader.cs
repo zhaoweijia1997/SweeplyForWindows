@@ -89,7 +89,7 @@ public sealed class KernelEventReader(TrackedProcesses tracked, Func<int, string
             if (version >= 1) f.Skip(4);                  // Flags
             if (version >= 3) { f.Skip(8); f.Sid(); }      // token elevation type, is elevated; MandatoryLabel
             string image = f.Unicode();
-            if (!tracked.Started(pid, parent)) return null;
+            if (!tracked.Started(pid, parent, image)) return null;
             return new BehaviorEvent
             {
                 Kind = BehaviorKind.ProcessStarted, ProcessId = pid, Number = parent, Target = image,

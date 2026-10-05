@@ -14,7 +14,7 @@ public sealed class ProcessEntry
     public int? ExitCode { get; set; }
 
     /// <summary>The one chosen (or started) to record, as opposed to one it started.</summary>
-    public bool IsRoot { get; init; }
+    public bool IsRoot { get; set; }
 
     public string Name => System.IO.Path.GetFileName(Path) is { Length: > 0 } name ? name : $"#{Id}";
 }
