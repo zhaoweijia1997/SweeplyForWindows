@@ -18,6 +18,9 @@ public sealed class TrackedProcesses
 
     public bool Contains(int processId) => _running.Contains(processId);
 
+    /// <summary>The ones running now (a copy).</summary>
+    public List<int> Ids() => _running.ToList();
+
     /// <summary>A process started: recorded too when its parent is. True when it is.</summary>
     public bool Started(int processId, int parentId)
     {

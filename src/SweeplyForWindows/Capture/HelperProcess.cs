@@ -48,14 +48,20 @@ internal static class HelperProcess
             if (server != appId || !HelperIdentity.IsSameProgram(server, Environment.ProcessPath)) return NotOurApp;
 
             // Off the UI thread, so the awaits inside never wait for a dispatcher that is blocked right here.
-            Task.Run(() => HelperHost.RunAsync(pipe, CreateSource, cancel.Token)).GetAwaiter().GetResult();
+            Task.Run(() => HelperHost.RunAsync(pipe, CreateJob, cancel.Token)).GetAwaiter().GetResult();
             return 0;
         }
     }
 
+    private static IHelperJob CreateJob(HelperRequest request) => request.Mode switch
+    {
+        HelperRequest.CaptureMode => new PacketJob(CreateSource(request)),
+        HelperRequest.BehaviorMode => new Sweeply.Core.Behavior.BehaviorJob(request.ProcessId, request.Launched),
+        _ => throw new HelperException("Failed", "unknown mode: " + request.Mode),
+    };
+
     private static IPacketSource CreateSource(HelperRequest request)
     {
-        if (request.Mode != HelperRequest.CaptureMode) throw new HelperException("Failed", "unknown mode: " + request.Mode);
         if (request.Backend == HelperRequest.ReplayBackend)
             return new ReplaySource(request.File ?? throw new HelperException("FileFailed"), request.RealTime);
         var adapters = NetworkAdapters.Read()

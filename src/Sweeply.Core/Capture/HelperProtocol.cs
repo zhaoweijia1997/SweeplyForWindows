@@ -16,6 +16,9 @@ public enum HelperMessage : byte
     /// <summary>Helper to app: it failed or stopped with a reason (JSON <see cref="HelperError"/>); nothing follows.</summary>
     Error = 4,
 
+    /// <summary>Helper to app, recording behaviour: what the recorded processes did (JSON list of <see cref="Behavior.BehaviorEvent"/>).</summary>
+    Behavior = 5,
+
     /// <summary>App to helper, first: what to do (JSON <see cref="HelperRequest"/>).</summary>
     Start = 16,
 
@@ -29,7 +32,7 @@ public enum HelperMessage : byte
 /// </summary>
 public sealed record HelperRequest
 {
-    public const string CaptureMode = "capture";
+    public const string CaptureMode = "capture", BehaviorMode = "behavior";
     public const string NdisCapBackend = "NdisCap", RawSocketBackend = "RawSocket", NpcapBackend = "Npcap", ReplayBackend = "Replay";
 
     public string Mode { get; init; } = CaptureMode;
@@ -43,10 +46,19 @@ public sealed record HelperRequest
 
     /// <summary>For <see cref="ReplayBackend"/>: keep the original gaps between packets (up to half a second), or go as fast as possible.</summary>
     public bool RealTime { get; init; } = true;
+
+    /// <summary>For <see cref="BehaviorMode"/>: the process to record, with every process it starts.</summary>
+    public int ProcessId { get; init; }
+
+    /// <summary>For <see cref="BehaviorMode"/>: the app has just started it, suspended; otherwise it was running, with what it had started.</summary>
+    public bool Launched { get; init; }
 }
 
-/// <summary>The helper is capturing: which way, on which interfaces, and (<paramref name="Fallback"/>) why a better way couldn't be used.</summary>
-public sealed record HelperHello(string Backend, List<CaptureInterface> Interfaces, HelperError? Fallback = null);
+/// <summary>
+/// The helper is capturing: which way, on which interfaces, and (<paramref name="Fallback"/>) why a better way couldn't be used.
+/// Recording behaviour: the processes recorded from the start (<paramref name="Processes"/>).
+/// </summary>
+public sealed record HelperHello(string Backend, List<CaptureInterface> Interfaces, HelperError? Fallback = null, List<int>? Processes = null);
 
 /// <summary>Why capturing failed: a code the app turns into words (see the cap.error.* strings), and what Windows said.</summary>
 public sealed record HelperError(string Code, string Detail);
