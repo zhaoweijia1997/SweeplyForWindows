@@ -28,35 +28,44 @@ public sealed class ProcessChoice
     public override string ToString() => Name;
 }
 
-public sealed record NotableRow(string Kind, string Explanation, string Target, string Program, string Time)
+// Each row says itself as its cells separated by tabs: what Copy puts on the clipboard (it pastes into a spreadsheet
+// as cells) and what screen readers announce.
+
+public sealed record NotableRow(string Kind, string Explanation, string Target, string Data, string Program, string Time)
 {
-    public override string ToString() => $"{Kind}  {Target}  {Program}";
+    public override string ToString() => string.Join('\t', Kind, Target, Data, Program, Time);
 }
 
-public sealed record BehaviorProcessRow(string Name, int Id, string Parent, string CommandLine, string Started, string Ended, string Usage, ImageSource? Icon, double Indent)
+public sealed record BehaviorProcessRow(string Name, int Id, string Parent, string CommandLine, string Started, string Ended, string Usage, ImageSource? Icon, double Indent, string Path)
 {
     public string IdText => Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
-    public override string ToString() => $"{Name}  {Id}  {Ended}";
+    public override string ToString() => string.Join('\t', Name, IdText, Started, Ended, Usage, CommandLine);
 }
 
 public sealed record BehaviorFileRow(string Path, string What, string Programs, string Time)
 {
-    public override string ToString() => $"{Path}  {What}  {Programs}";
+    public override string ToString() => string.Join('\t', Path, What, Programs, Time);
 }
 
 public sealed record BehaviorRegistryRow(string Key, string Value, string What, string Data, string Programs, string Time)
 {
-    public override string ToString() => $"{Key}  {Value}  {What}  {Data}";
+    public override string ToString() => string.Join('\t', Key, Value, What, Data, Programs, Time);
 }
 
 public sealed record BehaviorConnectionRow(string Remote, string Host, string Protocol, string Direction, int Count, string Programs, string Time)
 {
-    public override string ToString() => $"{Remote}  {Host}  {Protocol}  {Programs}";
+    public override string ToString() => string.Join('\t', Remote, Host, Protocol, Direction, Count, Programs, Time);
 }
 
 public sealed record BehaviorLookupRow(string Name, string Addresses, int Count, string Programs, string Time)
 {
-    public override string ToString() => $"{Name}  {Addresses}  {Programs}";
+    public override string ToString() => string.Join('\t', Name, Addresses, Count, Programs, Time);
+}
+
+/// <summary>A folder on the overview: where it is and what happened in it.</summary>
+public sealed record BehaviorFolderRow(string Folder, string Summary)
+{
+    public override string ToString() => string.Join('\t', Folder, Summary);
 }
 
 /// <summary>
@@ -93,6 +102,7 @@ public sealed class BehaviorViewModel : ObservableObject
         BrowseCommand = new RelayCommand(_ => { if (PickProgram?.Invoke() is string path) ProgramPath = path; }, () => !IsRecording);
         ExportCommand = new RelayCommand(_ => Export(), () => _report is { EventCount: > 0 } && !IsRecording);
         CopyCommand = new RelayCommand(p => { if (p?.ToString() is { Length: > 0 } text) Copy(text); });
+        OpenFolderCommand = new RelayCommand(p => OpenFolder(p switch { BehaviorFileRow f => f.Path, BehaviorProcessRow r => r.Path, BehaviorFolderRow d => d.Folder, _ => null }));
         _timer.Tick += (_, _) => Pump();
     }
 
@@ -102,6 +112,7 @@ public sealed class BehaviorViewModel : ObservableObject
     public ICommand BrowseCommand { get; }
     public ICommand ExportCommand { get; }
     public ICommand CopyCommand { get; }
+    public ICommand OpenFolderCommand { get; }
 
     /// <summary>Set by the window: choose a program (.exe) to start, save the CSV, the window UAC prompts belong to.</summary>
     public Func<string?>? PickProgram { get; set; }
@@ -181,6 +192,10 @@ public sealed class BehaviorViewModel : ObservableObject
     public string AddressCount { get; private set; } = "0";
     public string NameCount { get; private set; } = "0";
     public ObservableCollection<NotableRow> Notables { get; } = new();
+
+    /// <summary>The folders with the most changed files.</summary>
+    public ObservableCollection<BehaviorFolderRow> Folders { get; } = new();
+    public bool HasFolders => Folders.Count > 0;
     public bool NoNotables => _report is not null && Notables.Count == 0;
 
     // Sections, rebuilt when shown and while recording
@@ -392,8 +407,7 @@ public sealed class BehaviorViewModel : ObservableObject
         var e = _paths.Normalize(raw);
         report.Add(e);
         // The program the app started (the helper knew it by name and by who started it).
-        if (e.Kind == BehaviorKind.ProcessStarted && e.Number == Environment.ProcessId && report.Processes.TryGetValue(e.ProcessId, out var root))
-            root.IsRoot = true;
+        if (e.Kind == BehaviorKind.ProcessStarted && e.Number == Environment.ProcessId) report.MarkRoot(e.ProcessId);
     }
 
     private void ReadUsage(BehaviorReport report)
@@ -488,18 +502,30 @@ public sealed class BehaviorViewModel : ObservableObject
     private void ShowOverview()
     {
         if (_report is not { } report) return;
-        var culture = Loc.Instance.Culture;
+        var loc = Loc.Instance;
+        var culture = loc.Culture;
         ProcessCount = report.Processes.Count.ToString("N0", culture);
         FileCount = report.Files.Count.ToString("N0", culture);
         RegistryCount = report.Registry.Count.ToString("N0", culture);
         AddressCount = report.Connections.Select(c => c.Remote).Distinct().Count().ToString("N0", culture);
         NameCount = report.Lookups.Count.ToString("N0", culture);
-        if (Notables.Count != report.Notables.Count)
+        if (Notables.Count != report.Notables.Count || !Notables.Select(n => n.Data).SequenceEqual(report.Notables.Select(n => n.Data.Length > 0 ? "= " + n.Data : "")))
         {
             Notables.Clear();
             foreach (var n in report.Notables)
-                Notables.Add(new NotableRow(Loc.Instance["beh.notable." + n.Kind], Loc.Instance["beh.notable." + n.Kind + ".why"], n.Target, ProcessName(n.ProcessId), Time(n.TimeUtc)));
+                Notables.Add(new NotableRow(Loc.Instance["beh.notable." + n.Kind], Loc.Instance["beh.notable." + n.Kind + ".why"], n.Target,
+                    n.Data.Length > 0 ? "= " + n.Data : "", ProcessName(n.ProcessId), Time(n.TimeUtc)));
         }
+        Folders.Clear();
+        foreach (var f in report.Folders(8))
+        {
+            var parts = new List<string> { loc.Format("beh.folder.files", f.Files.ToString("N0", culture)) };
+            if (f.Created > 0) parts.Add(loc.Format("beh.folder.created", f.Created.ToString("N0", culture)));
+            if (f.Deleted > 0) parts.Add(loc.Format("beh.folder.deleted", f.Deleted.ToString("N0", culture)));
+            if (f.Bytes > 0) parts.Add(loc.Format("beh.what.written", SizeFormatter.Format(f.Bytes, culture)));
+            Folders.Add(new BehaviorFolderRow(f.Folder, string.Join(" · ", parts)));
+        }
+        OnPropertyChanged(nameof(HasFolders));
         OnPropertyChanged(nameof(ProcessCount));
         OnPropertyChanged(nameof(FileCount));
         OnPropertyChanged(nameof(RegistryCount));
@@ -591,7 +617,7 @@ public sealed class BehaviorViewModel : ObservableObject
                 u.ProcessorTime.TotalSeconds.ToString("0.0", culture), SizeFormatter.Format(u.PeakMemory, culture))
             : "";
         string parent = _report!.Processes.TryGetValue(p.ParentId, out var parentEntry) ? parentEntry.Name : "";
-        return new BehaviorProcessRow(p.Name, p.Id, parent, p.CommandLine, Time(p.StartedUtc), ended, usage, ProgramIcons.For(p.Path.Length > 0 ? p.Path : null), depth * 18);
+        return new BehaviorProcessRow(p.Name, p.Id, parent, p.CommandLine, Time(p.StartedUtc), ended, usage, ProgramIcons.For(p.Path.Length > 0 ? p.Path : null), depth * 18, p.Path);
     }
 
     private static string FileWhat(FileEntry f)
@@ -624,9 +650,15 @@ public sealed class BehaviorViewModel : ObservableObject
         var loc = Loc.Instance;
         var text = new StringBuilder();
         text.AppendLine(loc["beh.csv.header"]);
-        foreach (var e in report.Events)
+        // In time order: writes to a file are added up and come a moment after what happened around them.
+        foreach (var e in report.Events.OrderBy(e => e.TimeUtc))
         {
-            string detail = e.Kind == BehaviorKind.ValueSet ? $"{e.Detail} = {e.Data}" : e.Detail;
+            string detail = e.Detail;
+            if (e.Kind is BehaviorKind.ValueSet or BehaviorKind.ValueDeleted)
+            {
+                string name = e.Detail.Length == 0 ? loc["beh.defaultValue"] : e.Detail;
+                detail = e.Data.Length > 0 ? $"{name} = {e.Data}" : name;
+            }
             text.AppendLine(string.Join(",", new[]
             {
                 e.TimeUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture),
@@ -647,6 +679,19 @@ public sealed class BehaviorViewModel : ObservableObject
 
     private static string Csv(string value) =>
         value.IndexOfAny(new[] { ',', '"', '\n', '\r' }) < 0 ? value : "\"" + value.Replace("\"", "\"\"") + "\"";
+
+    /// <summary>Explorer at the file (selected) or, when it is gone, at the folder it was in.</summary>
+    private static void OpenFolder(string? path)
+    {
+        if (string.IsNullOrEmpty(path)) return;
+        try
+        {
+            if (File.Exists(path)) Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = false });
+            else if (Directory.Exists(path)) Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = false });
+            else if (Path.GetDirectoryName(path) is { } folder && Directory.Exists(folder)) Process.Start(new ProcessStartInfo("explorer.exe", $"\"{folder}\"") { UseShellExecute = false });
+        }
+        catch (System.ComponentModel.Win32Exception) { } // Explorer couldn't be started; nothing else to do
+    }
 
     private static void Copy(string text)
     {

@@ -108,7 +108,11 @@ public enum NotableKind
     SystemFolder,
 }
 
-public sealed record Notable(NotableKind Kind, string Target, int ProcessId, DateTime TimeUtc);
+/// <summary>A change worth a look; <paramref name="Data"/> is what a registry value holds (a Run entry: the program it starts).</summary>
+public sealed record Notable(NotableKind Kind, string Target, int ProcessId, DateTime TimeUtc, string Data = "");
+
+/// <summary>A folder in which files were changed: how many files, created, deleted, and bytes written.</summary>
+public sealed record FolderSummary(string Folder, int Files, int Created, int Deleted, long Bytes);
 
 /// <summary>Where the notable things are on this PC.</summary>
 public sealed record KnownLocations(string Windows, IReadOnlyList<string> ProgramFiles, IReadOnlyList<string> StartupFolders, string Tasks, string Hosts)
@@ -145,6 +149,7 @@ public sealed class BehaviorReport(KnownLocations places)
     private readonly List<Notable> _notables = new();
     private readonly HashSet<(NotableKind, string)> _notableSeen = new();
     private readonly List<BehaviorEvent> _events = new();
+    private readonly List<string> _ownFolders = new();
 
     public IReadOnlyDictionary<int, ProcessEntry> Processes => _processes;
     public IReadOnlyCollection<FileEntry> Files => _files.Values;
@@ -164,8 +169,44 @@ public sealed class BehaviorReport(KnownLocations places)
     public void AddRoot(int id, string path, string commandLine, DateTime startedUtc, int parentId = 0)
     {
         _processes[id] = new ProcessEntry { Id = id, ParentId = parentId, Path = path, CommandLine = commandLine, StartedUtc = startedUtc, IsRoot = true };
+        AddOwnFolder(path);
         Version++;
     }
+
+    /// <summary>A process recorded already is the one chosen (a program the app started, known once it had).</summary>
+    public void MarkRoot(int id)
+    {
+        if (!_processes.TryGetValue(id, out var p)) return;
+        p.IsRoot = true;
+        AddOwnFolder(p.Path);
+        Version++;
+    }
+
+    /// <summary>
+    /// The chosen program's own folder: its product's folder under Program Files ("C:\Program Files (x86)\Vendor"),
+    /// or else the folder it is in. What it writes there is its own business, not a change to Windows.
+    /// </summary>
+    private void AddOwnFolder(string path)
+    {
+        if (Path.GetDirectoryName(path) is not { Length: > 3 } folder) return;
+        foreach (string programFiles in places.ProgramFiles)
+            if (IsIn(folder, programFiles) || folder.Equals(programFiles, StringComparison.OrdinalIgnoreCase))
+            {
+                string rest = folder.Length > programFiles.Length ? folder[(programFiles.Length + 1)..] : "";
+                if (rest.Length == 0) return; // a program right in Program Files: no folder of its own
+                folder = Path.Combine(programFiles, rest.Split('\\')[0]);
+                break;
+            }
+        if (IsIn(folder, places.Windows) || folder.Equals(places.Windows, StringComparison.OrdinalIgnoreCase)) return; // Windows' own programs
+        if (!_ownFolders.Contains(folder, StringComparer.OrdinalIgnoreCase)) _ownFolders.Add(folder);
+    }
+
+    /// <summary>The folders with changed files, the most changed first.</summary>
+    public List<FolderSummary> Folders(int most) => _files.Values
+        .GroupBy(f => Path.GetDirectoryName(f.Path) ?? "", StringComparer.OrdinalIgnoreCase)
+        .Select(g => new FolderSummary(g.Key, g.Count(), g.Count(f => f.Created), g.Count(f => f.Deleted), g.Sum(f => f.Bytes)))
+        .OrderByDescending(f => f.Files).ThenByDescending(f => f.Bytes).ThenBy(f => f.Folder, StringComparer.OrdinalIgnoreCase)
+        .Take(most).ToList();
 
     public void Add(BehaviorEvent e)
     {
@@ -249,7 +290,15 @@ public sealed class BehaviorReport(KnownLocations places)
 
     private void Note(NotableKind kind, string target, BehaviorEvent e)
     {
-        if (_notableSeen.Add((kind, target.ToUpperInvariant()))) _notables.Add(new Notable(kind, target, e.ProcessId, e.TimeUtc));
+        if (_notableSeen.Add((kind, target.ToUpperInvariant())))
+        {
+            _notables.Add(new Notable(kind, target, e.ProcessId, e.TimeUtc, e.Data));
+            return;
+        }
+        // Noted already: keep the latest data of a value set again.
+        if (e.Data.Length == 0) return;
+        int i = _notables.FindIndex(n => n.Kind == kind && n.Target.Equals(target, StringComparison.OrdinalIgnoreCase));
+        if (i >= 0 && _notables[i].Data != e.Data) _notables[i] = _notables[i] with { Data = e.Data };
     }
 
     private NotableKind? FileNotable(BehaviorEvent e)
@@ -260,7 +309,8 @@ public sealed class BehaviorReport(KnownLocations places)
         if (IsIn(path, places.Tasks)) return NotableKind.ScheduledTask;
         if (path.Equals(places.Hosts, StringComparison.OrdinalIgnoreCase) && e.Kind != BehaviorKind.FileDeleted) return NotableKind.Hosts;
         if (changes && Executables.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase)) return NotableKind.Executable;
-        if (IsIn(path, places.Windows) && !IsIn(path, Path.Combine(places.Windows, "Temp")) || places.ProgramFiles.Any(folder => IsIn(path, folder)))
+        if ((IsIn(path, places.Windows) && !IsIn(path, Path.Combine(places.Windows, "Temp")) || places.ProgramFiles.Any(folder => IsIn(path, folder)))
+            && !_ownFolders.Any(folder => IsIn(path, folder)))
             return NotableKind.SystemFolder;
         return null;
     }

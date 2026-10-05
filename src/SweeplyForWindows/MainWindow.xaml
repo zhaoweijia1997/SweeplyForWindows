@@ -2045,6 +2045,8 @@
                                                                 <StackPanel>
                                                                     <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource SystemFillColorCautionBrush}" Text="{Binding Kind}"/>
                                                                     <TextBlock Text="{Binding Target}" TextWrapping="Wrap" Margin="0,2,0,0" FontFamily="Cascadia Mono, Consolas, Segoe UI" FontSize="12.5"/>
+                                                                    <TextBlock Text="{Binding Data}" TextWrapping="Wrap" Margin="0,1,0,0" FontFamily="Cascadia Mono, Consolas, Segoe UI" FontSize="12.5"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" Visibility="{Binding Data, Converter={StaticResource TextVisibility}}"/>
                                                                     <TextBlock Style="{StaticResource Secondary}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap" Text="{Binding Explanation}"/>
                                                                 </StackPanel>
                                                             </DockPanel>
@@ -2054,12 +2056,43 @@
                                             </ItemsControl>
                                             <TextBlock Style="{StaticResource Secondary}" FontSize="12" Margin="2,4,0,0" TextWrapping="Wrap"
                                                        Text="{Binding [beh.notable.hint], Source={x:Static loc:Loc.Instance}}"/>
+                                            <!-- The folders with the most changed files -->
+                                            <StackPanel Visibility="{Binding HasFolders, Converter={StaticResource TrueVisibility}}">
+                                                <TextBlock FontWeight="SemiBold" FontSize="14" Margin="2,16,0,8" Text="{Binding [beh.folders.title], Source={x:Static loc:Loc.Instance}}"/>
+                                                <Border Style="{StaticResource Card}" Padding="14,6">
+                                                    <ItemsControl ItemsSource="{Binding Folders}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <DockPanel Margin="0,4">
+                                                                    <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Margin="12,0,0,0" VerticalAlignment="Center"
+                                                                            Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"
+                                                                            Content="{Binding [beh.menu.openFolder], Source={x:Static loc:Loc.Instance}}"/>
+                                                                    <TextBlock DockPanel.Dock="Right" Style="{StaticResource Secondary}" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center" Text="{Binding Summary}"/>
+                                                                    <TextBlock Text="{Binding Folder}" FontFamily="Cascadia Mono, Consolas, Segoe UI" FontSize="12.5" VerticalAlignment="Center"
+                                                                               TextTrimming="CharacterEllipsis" ToolTip="{Binding Folder}"/>
+                                                                </DockPanel>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </Border>
+                                            </StackPanel>
                                         </StackPanel>
                                     </ScrollViewer>
 
                                     <!-- Processes, as a tree -->
                                     <ListView x:Name="BehaviorProcesses" Style="{StaticResource GridList}" ItemsSource="{Binding ProcessRows}"
                                               Visibility="{Binding SectionIndex, Converter={StaticResource PageVisibility}, ConverterParameter=1}">
+                                        <ListView.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="{Binding [beh.menu.copy], Source={x:Static loc:Loc.Instance}}" InputGestureText="Ctrl+C" Command="{Binding CopyCommand}"
+                                                          CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                                <MenuItem Header="{Binding [beh.menu.openFolder], Source={x:Static loc:Loc.Instance}}" Command="{Binding OpenFolderCommand}"
+                                                          CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                            </ContextMenu>
+                                        </ListView.ContextMenu>
+                                        <ListView.InputBindings>
+                                            <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopyCommand}" CommandParameter="{Binding SelectedItem, ElementName=BehaviorProcesses}"/>
+                                        </ListView.InputBindings>
                                         <ListView.View>
                                             <GridView AllowsColumnReorder="False">
                                                 <GridViewColumn Header="{Binding [beh.col.program], Source={x:Static loc:Loc.Instance}}" Width="230">
@@ -2086,6 +2119,17 @@
                                     <!-- Files -->
                                     <ListView x:Name="BehaviorFiles" Style="{StaticResource GridList}" ItemsSource="{Binding FileRows}"
                                               Visibility="{Binding SectionIndex, Converter={StaticResource PageVisibility}, ConverterParameter=2}">
+                                        <ListView.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="{Binding [beh.menu.copy], Source={x:Static loc:Loc.Instance}}" InputGestureText="Ctrl+C" Command="{Binding CopyCommand}"
+                                                          CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                                <MenuItem Header="{Binding [beh.menu.openFolder], Source={x:Static loc:Loc.Instance}}" Command="{Binding OpenFolderCommand}"
+                                                          CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                            </ContextMenu>
+                                        </ListView.ContextMenu>
+                                        <ListView.InputBindings>
+                                            <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopyCommand}" CommandParameter="{Binding SelectedItem, ElementName=BehaviorFiles}"/>
+                                        </ListView.InputBindings>
                                         <ListView.View>
                                             <GridView AllowsColumnReorder="False">
                                                 <GridViewColumn Header="{Binding [beh.col.path], Source={x:Static loc:Loc.Instance}}" Width="560" DisplayMemberBinding="{Binding Path}"/>
@@ -2099,6 +2143,15 @@
                                     <!-- Registry -->
                                     <ListView x:Name="BehaviorRegistry" Style="{StaticResource GridList}" ItemsSource="{Binding RegistryRows}"
                                               Visibility="{Binding SectionIndex, Converter={StaticResource PageVisibility}, ConverterParameter=3}">
+                                        <ListView.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="{Binding [beh.menu.copy], Source={x:Static loc:Loc.Instance}}" InputGestureText="Ctrl+C" Command="{Binding CopyCommand}"
+                                                          CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                            </ContextMenu>
+                                        </ListView.ContextMenu>
+                                        <ListView.InputBindings>
+                                            <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopyCommand}" CommandParameter="{Binding SelectedItem, ElementName=BehaviorRegistry}"/>
+                                        </ListView.InputBindings>
                                         <ListView.View>
                                             <GridView AllowsColumnReorder="False">
                                                 <GridViewColumn Header="{Binding [beh.col.key], Source={x:Static loc:Loc.Instance}}" Width="440" DisplayMemberBinding="{Binding Key}"/>
@@ -2119,6 +2172,15 @@
                                             <RowDefinition Height="2*"/>
                                         </Grid.RowDefinitions>
                                         <ListView x:Name="BehaviorConnections" Style="{StaticResource GridList}" ItemsSource="{Binding ConnectionRows}">
+                                            <ListView.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="{Binding [beh.menu.copy], Source={x:Static loc:Loc.Instance}}" InputGestureText="Ctrl+C" Command="{Binding CopyCommand}"
+                                                              CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                                </ContextMenu>
+                                            </ListView.ContextMenu>
+                                            <ListView.InputBindings>
+                                                <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopyCommand}" CommandParameter="{Binding SelectedItem, ElementName=BehaviorConnections}"/>
+                                            </ListView.InputBindings>
                                             <ListView.View>
                                                 <GridView AllowsColumnReorder="False">
                                                     <GridViewColumn Header="{Binding [beh.col.remote], Source={x:Static loc:Loc.Instance}}" Width="230" DisplayMemberBinding="{Binding Remote}"/>
@@ -2133,6 +2195,15 @@
                                         </ListView>
                                         <TextBlock Grid.Row="1" FontWeight="SemiBold" Margin="2,4,0,6" Text="{Binding [beh.lookups], Source={x:Static loc:Loc.Instance}}"/>
                                         <ListView x:Name="BehaviorLookups" Grid.Row="2" Style="{StaticResource GridList}" ItemsSource="{Binding LookupRows}">
+                                            <ListView.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="{Binding [beh.menu.copy], Source={x:Static loc:Loc.Instance}}" InputGestureText="Ctrl+C" Command="{Binding CopyCommand}"
+                                                              CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                                </ContextMenu>
+                                            </ListView.ContextMenu>
+                                            <ListView.InputBindings>
+                                                <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopyCommand}" CommandParameter="{Binding SelectedItem, ElementName=BehaviorLookups}"/>
+                                            </ListView.InputBindings>
                                             <ListView.View>
                                                 <GridView AllowsColumnReorder="False">
                                                     <GridViewColumn Header="{Binding [beh.col.name], Source={x:Static loc:Loc.Instance}}" Width="300" DisplayMemberBinding="{Binding Name}"/>

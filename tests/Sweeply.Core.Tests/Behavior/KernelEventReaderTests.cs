@@ -235,6 +235,43 @@ public class KernelEventReaderTests
         Assert.Equal("0000", KernelEventReader.ValueText(4, new byte[2])); // too short for a DWORD: shown as its bytes
     }
 
+    /// <summary>The kernel's value-set events carry no data (seen on Windows 11): it is read from the registry right after.</summary>
+    [Fact]
+    public void A_value_set_is_read_back_by_its_kernel_path()
+    {
+        string sid = System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value;
+        const string sub = @"Software\SweeplyForWindowsTest-" + nameof(A_value_set_is_read_back_by_its_kernel_path);
+        using (var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(sub))
+        {
+            key.SetValue("Run", @"""C:\Tools\x.exe"" --background");
+            key.SetValue("Expand", @"%TEMP%\x", Microsoft.Win32.RegistryValueKind.ExpandString);
+            key.SetValue("Lines", new[] { "a", "b" });
+            key.SetValue("Count", unchecked((int)0xFFFFFFFE), Microsoft.Win32.RegistryValueKind.DWord);
+            key.SetValue("Big", 1L << 40, Microsoft.Win32.RegistryValueKind.QWord);
+            key.SetValue("Bytes", new byte[] { 0, 255 });
+            key.SetValue("", "default");
+        }
+        try
+        {
+            string path = $@"\REGISTRY\USER\{sid}\{sub}";
+            Assert.Equal(@"""C:\Tools\x.exe"" --background", KernelEventReader.CurrentValue(path, "Run"));
+            Assert.Equal(@"%TEMP%\x", KernelEventReader.CurrentValue(path, "Expand")); // as stored, not expanded
+            Assert.Equal("a | b", KernelEventReader.CurrentValue(path, "Lines"));
+            Assert.Equal("4294967294", KernelEventReader.CurrentValue(path, "Count"));
+            Assert.Equal("1099511627776", KernelEventReader.CurrentValue(path, "Big"));
+            Assert.Equal("00ff", KernelEventReader.CurrentValue(path, "Bytes"));
+            Assert.Equal("default", KernelEventReader.CurrentValue(path, ""));
+            Assert.Null(KernelEventReader.CurrentValue(path, "Missing"));
+            Assert.Null(KernelEventReader.CurrentValue(path + @"\Gone", "Run"));
+            Assert.Null(KernelEventReader.CurrentValue(@"Software\Relative", "Run")); // a name not known in full
+            Assert.NotNull(KernelEventReader.CurrentValue(@"\REGISTRY\MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion", "ProductName"));
+        }
+        finally
+        {
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(sub, throwOnMissingSubKey: false);
+        }
+    }
+
     [Fact]
     public void Events_cut_short_never_throw()
     {

@@ -273,6 +273,37 @@ public sealed class KernelEventReader(TrackedProcesses tracked, Func<int, string
         return text.Length > Most ? text[..Most] + "…" : text;
     }
 
+    /// <summary>
+    /// A registry value's data as it is now, as text like <see cref="ValueText"/>, from the key's kernel path
+    /// ("\REGISTRY\MACHINE\…", "\REGISTRY\USER\…"). The kernel's value-set events name the value but come without its
+    /// data, so it is read right after; null when the key or value is gone (or can't be read).
+    /// </summary>
+    public static string? CurrentValue(string kernelKey, string valueName)
+    {
+        const string machine = @"\REGISTRY\MACHINE\", user = @"\REGISTRY\USER\";
+        Microsoft.Win32.RegistryKey root;
+        string path;
+        if (kernelKey.StartsWith(machine, StringComparison.OrdinalIgnoreCase)) (root, path) = (Microsoft.Win32.Registry.LocalMachine, kernelKey[machine.Length..]);
+        else if (kernelKey.StartsWith(user, StringComparison.OrdinalIgnoreCase)) (root, path) = (Microsoft.Win32.Registry.Users, kernelKey[user.Length..]);
+        else return null;
+        try
+        {
+            using var key = root.OpenSubKey(path);
+            if (key?.GetValue(valueName, null, Microsoft.Win32.RegistryValueOptions.DoNotExpandEnvironmentNames) is not { } value) return null;
+            string text = value switch
+            {
+                string s => s,
+                string[] lines => string.Join(" | ", lines),
+                int dword => ((uint)dword).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                long qword => ((ulong)qword).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                byte[] bytes => Convert.ToHexString(bytes, 0, Math.Min(bytes.Length, 64)).ToLowerInvariant(),
+                _ => value.ToString() ?? "",
+            };
+            return text.Length > 300 ? text[..300] + "…" : text;
+        }
+        catch (Exception e) when (e is System.Security.SecurityException or UnauthorizedAccessException or IOException) { return null; }
+    }
+
     /// <summary>Reads an event's fields one after another; past the end, numbers are 0 and strings empty.</summary>
     private ref struct Fields
     {

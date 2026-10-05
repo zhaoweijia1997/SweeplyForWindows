@@ -81,6 +81,9 @@ public sealed class BehaviorJob : IHelperJob
         {
             if (_reader.Read(e.Provider, e.Id, e.Version, e.ProcessId, DateTime.FromFileTimeUtc(e.FileTime), data) is { } found)
             {
+                // The kernel names the value but gives no data: what it holds now, read at once (a Run entry's program, say).
+                if (found.Kind == BehaviorKind.ValueSet && found.Data.Length == 0)
+                    found = found with { Data = KernelEventReader.CurrentValue(found.Target, found.Detail) ?? "" };
                 _batch.Add(Short(found));
                 Interlocked.Increment(ref _events);
             }

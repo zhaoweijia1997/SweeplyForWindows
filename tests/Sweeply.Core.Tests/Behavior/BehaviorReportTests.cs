@@ -103,6 +103,53 @@ public class BehaviorReportTests
     }
 
     [Fact]
+    public void What_a_program_writes_in_its_own_folder_is_its_own_business()
+    {
+        var report = new BehaviorReport(Places);
+        report.AddRoot(100, @"C:\Program Files (x86)\Vendor\Suite\tray\tray.exe", "", T0);
+        report.Add(E(BehaviorKind.FileWritten, @"C:\Program Files (x86)\Vendor\Suite\data\cache.db", size: 6));
+        report.Add(E(BehaviorKind.FileWritten, @"C:\Program Files (x86)\Vendor\Other\settings.ini"));     // the same vendor's folder
+        report.Add(E(BehaviorKind.FileCreated, @"C:\Program Files (x86)\Vendor\Suite\update\new.dll"));  // a program, even there
+        report.Add(E(BehaviorKind.FileWritten, @"C:\Program Files\SomeoneElse\config.ini"));              // another program's folder
+        report.Add(E(BehaviorKind.FileWritten, @"C:\Windows\System32\drivers\etc\networks"));
+        Assert.Equal(new[]
+        {
+            (NotableKind.Executable, @"C:\Program Files (x86)\Vendor\Suite\update\new.dll"),
+            (NotableKind.SystemFolder, @"C:\Program Files\SomeoneElse\config.ini"),
+            (NotableKind.SystemFolder, @"C:\Windows\System32\drivers\etc\networks"),
+        }, report.Notables.Select(n => (n.Kind, n.Target)));
+
+        // A program started by the app is known as the chosen one once it has started.
+        var launched = new BehaviorReport(Places);
+        launched.Add(E(BehaviorKind.ProcessStarted, @"C:\Program Files\Tool\tool.exe", pid: 300, number: 50));
+        launched.MarkRoot(300);
+        launched.Add(E(BehaviorKind.FileWritten, @"C:\Program Files\Tool\log.txt", pid: 300));
+        Assert.True(launched.Processes[300].IsRoot);
+        Assert.Empty(launched.Notables);
+
+        // Windows' own programs have no folder of their own: cmd.exe writing in System32 is still noted.
+        var windows = new BehaviorReport(Places);
+        windows.AddRoot(400, @"C:\Windows\System32\cmd.exe", "", T0);
+        windows.Add(E(BehaviorKind.FileWritten, @"C:\Windows\System32\x.log", pid: 400));
+        Assert.Single(windows.Notables);
+    }
+
+    [Fact]
+    public void Changed_files_are_added_up_by_folder()
+    {
+        var report = new BehaviorReport(Places);
+        report.Add(E(BehaviorKind.FileCreated, @"C:\Data\a\1.txt"));
+        report.Add(E(BehaviorKind.FileWritten, @"C:\Data\a\1.txt", size: 100));
+        report.Add(E(BehaviorKind.FileWritten, @"C:\Data\a\2.txt", size: 50));
+        report.Add(E(BehaviorKind.FileDeleted, @"C:\Data\A\3.txt"));
+        report.Add(E(BehaviorKind.FileWritten, @"C:\Data\b\4.txt", size: 9999));
+        var folders = report.Folders(10);
+        Assert.Equal(new FolderSummary(@"C:\Data\a", 3, 1, 1, 150), folders[0]);
+        Assert.Equal(new FolderSummary(@"C:\Data\b", 1, 0, 0, 9999), folders[1]);
+        Assert.Single(report.Folders(1));
+    }
+
+    [Fact]
     public void Registry_changes_that_make_programs_start_by_themselves_are_noted()
     {
         Assert.Equal(NotableKind.Autostart, BehaviorReport.RegistryNotable(BehaviorKind.ValueSet, @"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "Updater"));
@@ -123,8 +170,8 @@ public class BehaviorReportTests
         report.Add(E(BehaviorKind.KeyCreated, @"HKCU\Software\Example"));
         var run = report.Registry.Single(r => r.Value == "Updater");
         Assert.Equal((2, @"C:\x\update.exe"), (run.Sets, run.Data));
-        Assert.Single(report.Notables); // the same value noted once
-        Assert.Equal(@"HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Updater", report.Notables[0].Target);
+        Assert.Single(report.Notables); // the same value noted once, with what it holds last
+        Assert.Equal((@"HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Updater", @"C:\x\update.exe"), (report.Notables[0].Target, report.Notables[0].Data));
         Assert.Contains(report.Registry, r => r.Key == @"HKCU\Software\Example" && r.Value is null && r.Created);
     }
 
