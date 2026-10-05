@@ -271,6 +271,8 @@
   "monitor.temperature": "तापमान: {0}",
   "monitor.temp.Disk": "ड्राइव {0}",
   "monitor.temp.Graphics": "GPU {0}",
+  "monitor.part.Disk": "ड्राइव",
+  "monitor.part.Graphics": "ग्राफ़िक्स कार्ड",
   "monitor.title": "मॉनिटर",
   "monitor.subtitle": "यह PC अभी क्या कर रहा है। चार्ट पिछले 2 मिनट दिखाते हैं और सहेजे नहीं जाते।",
   "monitor.tab.performance": "प्रदर्शन",

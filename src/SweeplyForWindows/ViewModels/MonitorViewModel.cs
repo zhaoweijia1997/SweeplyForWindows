@@ -230,7 +230,7 @@ public sealed class MonitorViewModel : ObservableObject
         if (ThermalSampler.Hottest(_thermals) is { } hot)
         {
             Temperature.Value = RateFormatter.Celsius(hot.Celsius, culture);
-            Temperature.Detail = loc.Format("monitor.temp.hottest", hot.Name);
+            Temperature.Detail = loc.Format("monitor.temp.hottest", ThermalRow.Label(hot.Part, hot.Name));
             double low = _temperature.Min(now) ?? hot.Celsius, high = Math.Max(_temperature.Max(now), hot.Celsius);
             string lowText = RateFormatter.Celsius(low, culture), highText = RateFormatter.Celsius(high, culture);
             Temperature.Legend1 = lowText == highText

@@ -271,6 +271,8 @@
   "monitor.temperature": "Temp.: {0}",
   "monitor.temp.Disk": "disco {0}",
   "monitor.temp.Graphics": "GPU {0}",
+  "monitor.part.Disk": "Disco",
+  "monitor.part.Graphics": "Tarjeta gráfica",
   "monitor.title": "Monitor",
   "monitor.subtitle": "Lo que hace este PC ahora mismo. Los gráficos muestran los últimos 2 minutos y no se guardan.",
   "monitor.tab.performance": "Rendimiento",

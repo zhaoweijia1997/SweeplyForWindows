@@ -879,7 +879,7 @@
                                                             <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="{Binding Glyph}" FontSize="16"
                                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                                                             <StackPanel Grid.Column="1" Margin="12,0,12,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
+                                                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Title}"/>
                                                                 <TextBlock Style="{StaticResource Secondary}" FontSize="12" Text="{Binding RangeText}" TextWrapping="NoWrap"/>
                                                             </StackPanel>
                                                             <Grid Grid.Column="2" Height="34" VerticalAlignment="Center">
@@ -1245,8 +1245,9 @@
                                                             <ColumnDefinition Width="220"/>
                                                             <ColumnDefinition Width="124"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <StackPanel Orientation="Horizontal" ToolTip="{Binding ProgramTip}" Margin="0,0,8,0">
-                                                            <Image Source="{Binding Icon}" Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                        <!-- A dock, not a horizontal stack: the names get the column's width, so long ones end in "…" -->
+                                                        <DockPanel ToolTip="{Binding ProgramTip}" Margin="0,0,8,0">
+                                                            <Image DockPanel.Dock="Left" Source="{Binding Icon}" Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Center"
                                                                    RenderOptions.BitmapScalingMode="HighQuality"/>
                                                             <StackPanel VerticalAlignment="Center">
                                                                 <Button Style="{StaticResource LinkButton}" HorizontalAlignment="Left"
@@ -1257,7 +1258,7 @@
                                                                 <TextBlock Style="{StaticResource Secondary}" FontSize="11" Text="{Binding ServicesText}" TextWrapping="NoWrap"
                                                                            TextTrimming="CharacterEllipsis" Visibility="{Binding ServicesText, Converter={StaticResource TextVisibility}}"/>
                                                             </StackPanel>
-                                                        </StackPanel>
+                                                        </DockPanel>
                                                         <TextBlock Grid.Column="1" Style="{StaticResource Secondary}" Text="{Binding ProtocolText}" VerticalAlignment="Center"/>
                                                         <TextBlock Grid.Column="2" Text="{Binding LocalText}" FontFamily="Cascadia Mono, Consolas" FontSize="12.5"
                                                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding LocalText}"/>

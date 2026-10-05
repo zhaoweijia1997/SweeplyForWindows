@@ -18,7 +18,7 @@ public sealed record InfoPair(string Label, string Value);
 public sealed class ThermalRow : ObservableObject
 {
     private static readonly Brush Orange = Frozen(Color.FromRgb(0xF9, 0x73, 0x16));
-    private string _valueText = "", _rangeText = "", _limitText = "";
+    private string _title = "", _valueText = "", _rangeText = "", _limitText = "";
     private IReadOnlyList<ChartPoint>? _points;
     private double _minimum, _maximum = 100;
 
@@ -30,6 +30,12 @@ public sealed class ThermalRow : ObservableObject
 
     public ThermalPart Part { get; }
     public string Name { get; }
+
+    /// <summary>What kind of part and which one, e.g. "Drive · Samsung SSD 990 PRO 1TB".</summary>
+    public string Title { get => _title; set => SetField(ref _title, value); }
+
+    /// <summary>"Drive · Samsung SSD 990 PRO 1TB": the kind of part in the current language, then its own (model) name.</summary>
+    public static string Label(ThermalPart part, string name) => $"{Loc.Instance["monitor.part." + part]} · {name}";
     public string Glyph => Part == ThermalPart.Disk ? "" : "";
     public Brush Brush => Orange;
     public double WindowSeconds => MonitorViewModel.Window.TotalSeconds;
@@ -134,6 +140,7 @@ public sealed class HardwareViewModel : ObservableObject
         var culture = Loc.Instance.Culture;
         double low = row.History.Min(now) ?? celsius, high = Math.Max(row.History.Max(now), celsius);
         string lowText = RateFormatter.Celsius(low, culture), highText = RateFormatter.Celsius(high, culture);
+        row.Title = ThermalRow.Label(row.Part, row.Name);
         row.ValueText = RateFormatter.Celsius(celsius, culture);
         row.RangeText = lowText == highText ? Loc.Instance.Format("monitor.temp.steady", highText) : Loc.Instance.Format("monitor.temp.range", lowText, highText);
         row.Minimum = Math.Floor((low - 3) / 5) * 5;

@@ -191,7 +191,7 @@ internal sealed class MonitorController : IDisposable
             _barModel.Cpu = hasCpu ? cpu + "%" : "—";
             _barModel.DiskWrite = disk;
             _barModel.Temperature = hottest is { } h ? RateFormatter.Celsius(h.Celsius, culture) : "";
-            _barModel.TemperatureDetails = string.Join("\n", _thermals.Select(t => $"{t.Name}  {RateFormatter.Celsius(t.Celsius, culture)}"));
+            _barModel.TemperatureDetails = string.Join("\n", _thermals.Select(t => $"{ViewModels.ThermalRow.Label(t.Part, t.Name)}  {RateFormatter.Celsius(t.Celsius, culture)}"));
         }
     }
 

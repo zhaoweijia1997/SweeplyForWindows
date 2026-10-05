@@ -43,14 +43,19 @@ public sealed class ConnectionRow : ObservableObject
     public ImageSource? Icon { get; set; }
     public string ProgramName => Program.Name.Length > 0 ? Program.Name : "—";
 
-    /// <summary>For svchost.exe: the services it runs, which say much more than the name.</summary>
-    public string ServicesText => Program.Services.Count == 0 ? "" : string.Join(", ", Program.Services.Take(3)) + (Program.Services.Count > 3 ? " …" : "");
+    /// <summary>
+    /// For svchost.exe: the services it runs, which say much more than the name; by the names Windows shows for them
+    /// ("Windows Update", in Windows' language), the short ones ("wuauserv") in the tip.
+    /// </summary>
+    public string ServicesText => Program.Services.Count == 0 ? "" : string.Join(", ", Program.Services.Take(3).Select(s => s.DisplayName)) + (Program.Services.Count > 3 ? " …" : "");
 
     public string ProgramTip => string.Join("\n", new[]
     {
         Program.Path ?? Program.Name,
         Loc.Instance.Format("conn.pid", Program.ProcessId),
-        Program.Services.Count > 0 ? Loc.Instance.Format("conn.services", string.Join(", ", Program.Services)) : "",
+        Program.Services.Count > 0
+            ? Loc.Instance.Format("conn.services", string.Concat(Program.Services.Select(s => s.DisplayName == s.Name ? $"\n{s.Name}" : $"\n{s.DisplayName} ({s.Name})")))
+            : "",
     }.Where(line => line.Length > 0));
 
     public string ProtocolText { get; }
@@ -268,7 +273,8 @@ public sealed class ConnectionsViewModel : ObservableObject
     }
 
     private static bool Matches(ConnectionRow row, string filter) =>
-        new[] { row.ProgramName, row.ServicesText, row.LocalText, row.RemoteText, row.RemoteNote, row.StateText, row.ProtocolText }
+        new[] { row.ProgramName, row.LocalText, row.RemoteText, row.RemoteNote, row.StateText, row.ProtocolText }
+            .Concat(row.Program.Services.SelectMany(s => new[] { s.Name, s.DisplayName })) // all of them, by either name
             .Any(text => text.Contains(filter, StringComparison.OrdinalIgnoreCase));
 
     private int Compare(ConnectionRow a, ConnectionRow b)
@@ -370,17 +376,22 @@ public sealed class ConnectionsViewModel : ObservableObject
         var now = DateTime.UtcNow;
         IPAddress Ip(string s) => IPAddress.Parse(s);
         var own = Ip("192.0.2.23");
-        var samples = new (string Program, int Pid, string[] Services, string Remote, int Port, int Local, TcpConnectionState State, RowStatus Status, string Note)[]
+        // The names Windows shows for services, as a Chinese or an English Windows has them.
+        bool chinese = Loc.Instance.Culture.Name == "zh-Hans";
+        var dnsClient = new ServiceInfo("Dnscache", "DNS Client");
+        var location = new ServiceInfo("nlasvc", chinese ? "网络位置感知" : "Network Location Awareness");
+        var update = new ServiceInfo("wuauserv", chinese ? "Windows 更新" : "Windows Update");
+        var samples = new (string Program, int Pid, ServiceInfo[] Services, string Remote, int Port, int Local, TcpConnectionState State, RowStatus Status, string Note)[]
         {
-            ("chrome.exe", 9812, Array.Empty<string>(), "203.0.113.10", 443, 52211, TcpConnectionState.Established, RowStatus.Normal, "www.example.com"),
-            ("chrome.exe", 9812, Array.Empty<string>(), "203.0.113.24", 443, 52240, TcpConnectionState.Established, RowStatus.New, "cdn.example.net"),
-            ("chrome.exe", 9812, Array.Empty<string>(), "198.51.100.80", 443, 52102, TcpConnectionState.CloseWait, RowStatus.Normal, ""),
-            ("Code.exe", 7340, Array.Empty<string>(), "203.0.113.77", 443, 51870, TcpConnectionState.Established, RowStatus.Normal, "update.example.org"),
-            ("OneDrive.exe", 6124, Array.Empty<string>(), "198.51.100.33", 443, 51544, TcpConnectionState.Established, RowStatus.Normal, ""),
-            ("Spotify.exe", 11420, Array.Empty<string>(), "203.0.113.150", 4070, 52007, TcpConnectionState.Established, RowStatus.Normal, ""),
-            ("svchost.exe", 1388, new[] { "Dnscache", "nlasvc" }, "192.0.2.1", 53, 50110, TcpConnectionState.SynSent, RowStatus.New, ""),
-            ("svchost.exe", 2216, new[] { "wuauserv" }, "198.51.100.200", 443, 50981, TcpConnectionState.Established, RowStatus.Closed, ""),
-            ("steam.exe", 15008, Array.Empty<string>(), "192.0.2.47", 27036, 27036, TcpConnectionState.Established, RowStatus.Normal, ""),
+            ("chrome.exe", 9812, Array.Empty<ServiceInfo>(), "203.0.113.10", 443, 52211, TcpConnectionState.Established, RowStatus.Normal, "www.example.com"),
+            ("chrome.exe", 9812, Array.Empty<ServiceInfo>(), "203.0.113.24", 443, 52240, TcpConnectionState.Established, RowStatus.New, "cdn.example.net"),
+            ("chrome.exe", 9812, Array.Empty<ServiceInfo>(), "198.51.100.80", 443, 52102, TcpConnectionState.CloseWait, RowStatus.Normal, ""),
+            ("Code.exe", 7340, Array.Empty<ServiceInfo>(), "203.0.113.77", 443, 51870, TcpConnectionState.Established, RowStatus.Normal, "update.example.org"),
+            ("OneDrive.exe", 6124, Array.Empty<ServiceInfo>(), "198.51.100.33", 443, 51544, TcpConnectionState.Established, RowStatus.Normal, ""),
+            ("Spotify.exe", 11420, Array.Empty<ServiceInfo>(), "203.0.113.150", 4070, 52007, TcpConnectionState.Established, RowStatus.Normal, ""),
+            ("svchost.exe", 1388, new[] { dnsClient, location }, "192.0.2.1", 53, 50110, TcpConnectionState.SynSent, RowStatus.New, ""),
+            ("svchost.exe", 2216, new[] { update }, "198.51.100.200", 443, 50981, TcpConnectionState.Established, RowStatus.Closed, ""),
+            ("steam.exe", 15008, Array.Empty<ServiceInfo>(), "192.0.2.47", 27036, 27036, TcpConnectionState.Established, RowStatus.Normal, ""),
         };
         _adapters = new[] { new NetworkAdapter { Id = "wifi", Name = "Wi-Fi", IsUp = true, IPv4 = new[] { (own, 24) } } };
         _rows.Clear();

@@ -271,6 +271,8 @@
   "monitor.temperature": "溫度 {0}",
   "monitor.temp.Disk": "硬碟 {0}",
   "monitor.temp.Graphics": "顯示卡 {0}",
+  "monitor.part.Disk": "硬碟",
+  "monitor.part.Graphics": "顯示卡",
   "monitor.title": "監控",
   "monitor.subtitle": "這台電腦現在的狀態。曲線顯示最近 2 分鐘，不會儲存。",
   "monitor.tab.performance": "效能",

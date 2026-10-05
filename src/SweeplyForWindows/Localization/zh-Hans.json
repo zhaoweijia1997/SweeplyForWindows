@@ -271,6 +271,8 @@
   "monitor.temperature": "温度 {0}",
   "monitor.temp.Disk": "硬盘 {0}",
   "monitor.temp.Graphics": "显卡 {0}",
+  "monitor.part.Disk": "硬盘",
+  "monitor.part.Graphics": "显卡",
   "monitor.title": "监控",
   "monitor.subtitle": "这台电脑现在的状态。曲线显示最近 2 分钟，不会保存。",
   "monitor.tab.performance": "性能",

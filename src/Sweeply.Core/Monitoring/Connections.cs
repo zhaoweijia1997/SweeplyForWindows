@@ -178,7 +178,10 @@ public static class ConnectionTable
 }
 
 /// <summary>A program as the connection list shows it: "chrome.exe", where it is, and for svchost.exe the services it runs.</summary>
-public sealed record ProgramInfo(int ProcessId, string Name, string? Path, IReadOnlyList<string> Services);
+public sealed record ProgramInfo(int ProcessId, string Name, string? Path, IReadOnlyList<ServiceInfo> Services);
+
+/// <summary>A Windows service: its short name ("wuauserv") and the name Windows shows for it, in Windows' language ("Windows Update").</summary>
+public sealed record ServiceInfo(string Name, string DisplayName);
 
 /// <summary>
 /// Names programs by process id, with what Windows lets a normal user see: the full path for most programs
@@ -189,7 +192,7 @@ public sealed class ProgramNames
 {
     private static readonly TimeSpan KeepFor = TimeSpan.FromMinutes(1);
     private readonly Dictionary<int, (ProgramInfo Info, DateTime Utc)> _cache = new();
-    private Dictionary<int, List<string>> _services = new();
+    private Dictionary<int, List<ServiceInfo>> _services = new();
     private DateTime _servicesUtc = DateTime.MinValue;
 
     public ProgramInfo Get(int processId)
@@ -206,11 +209,11 @@ public sealed class ProgramNames
 
     private ProgramInfo Look(int processId, DateTime now)
     {
-        if (processId == 0) return new ProgramInfo(0, "", null, Array.Empty<string>());
-        if (processId == 4) return new ProgramInfo(4, "System", null, Array.Empty<string>());
+        if (processId == 0) return new ProgramInfo(0, "", null, Array.Empty<ServiceInfo>());
+        if (processId == 4) return new ProgramInfo(4, "System", null, Array.Empty<ServiceInfo>());
         string? path = ImagePath(processId);
         string name = path is not null ? System.IO.Path.GetFileName(path) : FallbackName(processId);
-        IReadOnlyList<string> services = Array.Empty<string>();
+        IReadOnlyList<ServiceInfo> services = Array.Empty<ServiceInfo>();
         if (name.Equals("svchost.exe", StringComparison.OrdinalIgnoreCase))
         {
             lock (_cache)
@@ -253,10 +256,10 @@ public sealed class ProgramNames
         catch (Exception e) when (e is ArgumentException or InvalidOperationException) { return ""; } // ended meanwhile
     }
 
-    /// <summary>The services that run in each process, from the service manager (readable by any user).</summary>
-    private static Dictionary<int, List<string>> ServicesByProcess()
+    /// <summary>The services that run in each process, from the service manager (readable by any user), with the names it shows for them.</summary>
+    private static Dictionary<int, List<ServiceInfo>> ServicesByProcess()
     {
-        var result = new Dictionary<int, List<string>>();
+        var result = new Dictionary<int, List<ServiceInfo>>();
         IntPtr manager = OpenSCManagerW(null, null, 0x0004 /* SC_MANAGER_ENUMERATE_SERVICE */);
         if (manager == IntPtr.Zero) return result;
         try
@@ -277,10 +280,11 @@ public sealed class ProgramNames
                 {
                     IntPtr entry = buffer + i * size;
                     string? name = Marshal.PtrToStringUni(Marshal.ReadIntPtr(entry));
+                    string? display = Marshal.PtrToStringUni(Marshal.ReadIntPtr(entry, IntPtr.Size));
                     int processId = Marshal.ReadInt32(entry, IntPtr.Size * 2 + 28);
                     if (name is null || processId == 0) continue;
-                    if (!result.TryGetValue(processId, out var list)) result[processId] = list = new List<string>();
-                    list.Add(name);
+                    if (!result.TryGetValue(processId, out var list)) result[processId] = list = new List<ServiceInfo>();
+                    list.Add(new ServiceInfo(name, string.IsNullOrWhiteSpace(display) ? name : display));
                 }
             }
             finally

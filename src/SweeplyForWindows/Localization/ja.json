@@ -271,6 +271,8 @@
   "monitor.temperature": "温度 {0}",
   "monitor.temp.Disk": "ドライブ {0}",
   "monitor.temp.Graphics": "GPU {0}",
+  "monitor.part.Disk": "ドライブ",
+  "monitor.part.Graphics": "GPU",
   "monitor.title": "モニター",
   "monitor.subtitle": "この PC の今の状態です。グラフは直近 2 分間を表示し、保存はしません。",
   "monitor.tab.performance": "パフォーマンス",
