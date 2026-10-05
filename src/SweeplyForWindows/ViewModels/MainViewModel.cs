@@ -70,6 +70,7 @@ public sealed class MainViewModel : ObservableObject
     {
         _paths = paths;
         _settings = settings;
+        Monitor.Connections.RecordBehaviorRequested += RecordBehavior;
         _history = history ?? CleanHistory.Load(HistoryFile);
         foreach (var category in CategoryCatalog.Create(paths))
         {
@@ -237,6 +238,13 @@ public sealed class MainViewModel : ObservableObject
 
     /// <summary>The Behaviour page: what a program does while it runs.</summary>
     public BehaviorViewModel Behavior { get; } = new();
+
+    /// <summary>A connection's program to record: the Behaviour page with it chosen.</summary>
+    private void RecordBehavior(int processId)
+    {
+        PageIndex = BehaviorPage;
+        Behavior.Choose(processId);
+    }
 
     /// <summary>"--open-capture &lt;file&gt;" or a file dropped on the window: the Capture page with that file.</summary>
     public void OpenCapture(string path)

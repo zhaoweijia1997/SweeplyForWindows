@@ -423,6 +423,7 @@
   "conn.copy": "पंक्ति कॉपी करें",
   "conn.copyRemote": "रिमोट पता कॉपी करें",
   "conn.reveal": "फ़ाइल एक्सप्लोरर में प्रोग्राम दिखाएँ",
+  "conn.recordBehavior": "इस प्रोग्राम का व्यवहार रिकॉर्ड करें",
   "conn.state.Closed": "बंद",
   "conn.state.Listen": "सुन रहा है",
   "conn.state.SynSent": "जुड़ रहा है",

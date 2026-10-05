@@ -117,6 +117,7 @@ public sealed class ConnectionsViewModel : ObservableObject
         CopyCommand = new RelayCommand(p => Copy(p as ConnectionRow, remoteOnly: false));
         CopyRemoteCommand = new RelayCommand(p => Copy(p as ConnectionRow, remoteOnly: true));
         RevealCommand = new RelayCommand(p => Reveal(p as ConnectionRow));
+        RecordBehaviorCommand = new RelayCommand(p => { if (p is ConnectionRow { Program.ProcessId: > 4 } row) RecordBehaviorRequested?.Invoke(row.Program.ProcessId); });
     }
 
     public ObservableCollection<ConnectionRow> Rows { get; } = new();
@@ -162,6 +163,10 @@ public sealed class ConnectionsViewModel : ObservableObject
     public ICommand CopyCommand { get; }
     public ICommand CopyRemoteCommand { get; }
     public ICommand RevealCommand { get; }
+
+    /// <summary>"Record this program's behaviour" on a row: the Behaviour page takes it from here.</summary>
+    public ICommand RecordBehaviorCommand { get; }
+    public event Action<int>? RecordBehaviorRequested;
 
     public void SetShown(bool shown)
     {

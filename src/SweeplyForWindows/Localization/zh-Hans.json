@@ -423,6 +423,7 @@
   "conn.copy": "复制这一行",
   "conn.copyRemote": "复制远程地址",
   "conn.reveal": "在资源管理器中显示程序",
+  "conn.recordBehavior": "记录这个程序的行为",
   "conn.state.Closed": "已关闭",
   "conn.state.Listen": "监听中",
   "conn.state.SynSent": "正在连接",

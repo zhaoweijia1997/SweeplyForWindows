@@ -423,6 +423,7 @@
   "conn.copy": "Копировать строку",
   "conn.copyRemote": "Копировать удалённый адрес",
   "conn.reveal": "Показать программу в проводнике",
+  "conn.recordBehavior": "Записать поведение этой программы",
   "conn.state.Closed": "Закрыто",
   "conn.state.Listen": "Ожидание",
   "conn.state.SynSent": "Подключение",

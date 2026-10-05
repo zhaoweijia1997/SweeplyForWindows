@@ -423,6 +423,7 @@
   "conn.copy": "この行をコピー",
   "conn.copyRemote": "リモート アドレスをコピー",
   "conn.reveal": "エクスプローラーでプログラムを表示",
+  "conn.recordBehavior": "このプログラムの動作を記録",
   "conn.state.Closed": "終了",
   "conn.state.Listen": "待ち受け中",
   "conn.state.SynSent": "接続中",

@@ -1244,6 +1244,9 @@
                                                                       Command="{Binding PlacementTarget.Tag.CopyRemoteCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
                                                             <MenuItem Header="{Binding [conn.reveal], Source={x:Static loc:Loc.Instance}}"
                                                                       Command="{Binding PlacementTarget.Tag.RevealCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                                            <Separator/>
+                                                            <MenuItem Header="{Binding [conn.recordBehavior], Source={x:Static loc:Loc.Instance}}"
+                                                                      Command="{Binding PlacementTarget.Tag.RecordBehaviorCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
                                                         </ContextMenu>
                                                     </Border.ContextMenu>
                                                     <Grid>

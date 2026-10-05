@@ -423,6 +423,7 @@
   "conn.copy": "Copiar fila",
   "conn.copyRemote": "Copiar dirección remota",
   "conn.reveal": "Mostrar el programa en el Explorador",
+  "conn.recordBehavior": "Registrar el comportamiento de este programa",
   "conn.state.Closed": "Cerrada",
   "conn.state.Listen": "Escuchando",
   "conn.state.SynSent": "Conectando",

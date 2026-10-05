@@ -423,6 +423,7 @@
   "conn.copy": "Copy",
   "conn.copyRemote": "Copy remote address",
   "conn.reveal": "Show the program in File Explorer",
+  "conn.recordBehavior": "Record this program's behavior",
   "conn.state.Closed": "Closed",
   "conn.state.Listen": "Listening",
   "conn.state.SynSent": "Connecting",

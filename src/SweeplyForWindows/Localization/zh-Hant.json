@@ -423,6 +423,7 @@
   "conn.copy": "複製這一列",
   "conn.copyRemote": "複製遠端位址",
   "conn.reveal": "在檔案總管中顯示程式",
+  "conn.recordBehavior": "記錄這個程式的行為",
   "conn.state.Closed": "已關閉",
   "conn.state.Listen": "接聽中",
   "conn.state.SynSent": "正在連線",

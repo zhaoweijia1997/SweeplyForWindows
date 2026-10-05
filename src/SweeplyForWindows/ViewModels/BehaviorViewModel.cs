@@ -85,6 +85,7 @@ public sealed class BehaviorViewModel : ObservableObject
     private readonly ConcurrentQueue<BehaviorEvent> _polled = new();
     private readonly Dictionary<int, ProcessUsage> _usage = new();
     private SystemPaths _paths = new(Array.Empty<(string, string)>(), null);
+    private IReadOnlyList<Sweeply.Core.Monitoring.NetworkAdapter> _adapters = Array.Empty<Sweeply.Core.Monitoring.NetworkAdapter>();
     private BehaviorReport? _report;
     private CaptureSession? _session;
     private BehaviorPoller? _poller;
@@ -239,6 +240,15 @@ public sealed class BehaviorViewModel : ObservableObject
         SelectedProcess = Processes.FirstOrDefault(c => c.Id == keep);
     }
 
+    /// <summary>A running process chosen elsewhere (a connection's program): ready to record, unless recording already.</summary>
+    public void Choose(int processId)
+    {
+        if (!IsIdle) return;
+        LaunchMode = false;
+        RefreshProcesses();
+        SelectedProcess = Processes.FirstOrDefault(p => p.Id == processId) ?? SelectedProcess;
+    }
+
     /// <summary>This app's own helpers (the same program file) aren't something to record.</summary>
     private static bool IsHelperOf(string path) => string.Equals(path, Environment.ProcessPath, StringComparison.OrdinalIgnoreCase);
 
@@ -258,6 +268,8 @@ public sealed class BehaviorViewModel : ObservableObject
         try
         {
             _paths = await Task.Run(SystemPaths.ForThisPc);
+            try { _adapters = await Task.Run(Sweeply.Core.Monitoring.NetworkAdapters.Read); }
+            catch (System.Net.NetworkInformation.NetworkInformationException) { _adapters = Array.Empty<Sweeply.Core.Monitoring.NetworkAdapter>(); }
             var report = new BehaviorReport(KnownLocations.ForThisPc());
             _usage.Clear();
             _polled.Clear();
@@ -590,7 +602,7 @@ public sealed class BehaviorViewModel : ObservableObject
             case NetworkSection:
             {
                 var connections = report.Connections.OrderBy(c => c.FirstUtc)
-                    .Select(c => new BehaviorConnectionRow(c.Remote, c.Host, c.Protocol, loc[c.Inbound ? "beh.dir.in" : "beh.dir.out"], c.Count, Programs(c.Processes), Time(c.FirstUtc)))
+                    .Select(c => new BehaviorConnectionRow(c.Remote, c.Host.Length > 0 ? c.Host : AddressNote(c.Remote), c.Protocol, loc[c.Inbound ? "beh.dir.in" : "beh.dir.out"], c.Count, Programs(c.Processes), Time(c.FirstUtc)))
                     .Where(r => Passes(r.ToString())).ToList();
                 var lookups = report.Lookups.OrderBy(l => l.FirstUtc)
                     .Select(l => new BehaviorLookupRow(l.Name, string.Join(", ", l.Addresses), l.Count, Programs(l.Processes), Time(l.FirstUtc)))
@@ -618,6 +630,17 @@ public sealed class BehaviorViewModel : ObservableObject
             : "";
         string parent = _report!.Processes.TryGetValue(p.ParentId, out var parentEntry) ? parentEntry.Name : "";
         return new BehaviorProcessRow(p.Name, p.Id, parent, p.CommandLine, Time(p.StartedUtc), ended, usage, ProgramIcons.For(p.Path.Length > 0 ? p.Path : null), depth * 18, p.Path);
+    }
+
+    /// <summary>What an address without a looked-up name is, as the Connections tab says it: this PC, a proxy's TUN address, the local network.</summary>
+    private string AddressNote(string remote)
+    {
+        int colon = remote.LastIndexOf(':');
+        if (colon <= 0 || !System.Net.IPAddress.TryParse(remote[..colon].Trim('[', ']'), out var address)) return "";
+        var loc = Loc.Instance;
+        if (System.Net.IPAddress.IsLoopback(address)) return loc["conn.thisPc"];
+        if (Sweeply.Core.Monitoring.NetworkTools.IsProxyFakeAddress(address)) return loc["conn.fake"];
+        return Sweeply.Core.Monitoring.NetworkAdapters.IsOnLocalNetwork(address, _adapters) ? loc["conn.lan"] : "";
     }
 
     private static string FileWhat(FileEntry f)
