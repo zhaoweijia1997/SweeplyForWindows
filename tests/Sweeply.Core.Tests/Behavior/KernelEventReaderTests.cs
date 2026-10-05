@@ -142,6 +142,15 @@ public class KernelEventReaderTests
 
         Assert.Equal((BehaviorKind.FileDeleted, path), Pair(Read(reader, KernelEventReader.FileProvider, 26, version, 100, ByPath(path))!));
         Assert.Equal((BehaviorKind.FileRenamed, path), Pair(Read(reader, KernelEventReader.FileProvider, 27, version, 100, ByPath(path))!));
+        Assert.Equal("", Read(reader, KernelEventReader.FileProvider, 26, version, 100, ByPath(path))!.Detail);
+
+        // A folder: opened as one (FILE_DIRECTORY_FILE) by the object that then deletes it.
+        Assert.Null(Read(reader, KernelEventReader.FileProvider, 12, version, 100, Create(0x1111, 0x01000021, @"\Device\HarddiskVolume3\Temp\old")));
+        var folder = Read(reader, KernelEventReader.FileProvider, 26, version, 100, ByPath(@"\Device\HarddiskVolume3\Temp\old"))!;
+        Assert.Equal((BehaviorKind.FileDeleted, KernelEventReader.FolderDetail), (folder.Kind, folder.Detail));
+        // The same address opened later for a file is a file again.
+        Assert.Null(Read(reader, KernelEventReader.FileProvider, 12, version, 100, Create(0x1111, 0x01000020, path)));
+        Assert.Equal("", Read(reader, KernelEventReader.FileProvider, 26, version, 100, ByPath(path))!.Detail);
     }
 
     private static (BehaviorKind, string) Pair(BehaviorEvent e) => (e.Kind, e.Target);

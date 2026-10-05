@@ -28,6 +28,10 @@ public sealed class FileEntry
     public long Bytes { get; set; }
     public bool Deleted { get; set; }
     public bool Renamed { get; set; }
+
+    /// <summary>A folder (deleted or renamed), not a file.</summary>
+    public bool IsFolder { get; set; }
+
     public HashSet<int> Processes { get; } = new();
     public DateTime FirstUtc { get; init; }
     public DateTime LastUtc { get; set; }
@@ -262,6 +266,7 @@ public sealed class BehaviorReport(KnownLocations places)
         if (!_files.TryGetValue(e.Target, out var file)) _files[e.Target] = file = new FileEntry { Path = e.Target, FirstUtc = e.TimeUtc };
         file.LastUtc = e.TimeUtc;
         file.Processes.Add(e.ProcessId);
+        if (e.Detail == KernelEventReader.FolderDetail) file.IsFolder = true;
         switch (e.Kind)
         {
             case BehaviorKind.FileCreated: file.Created = true; break;

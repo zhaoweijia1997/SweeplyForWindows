@@ -647,6 +647,7 @@ public sealed class BehaviorViewModel : ObservableObject
     {
         var loc = Loc.Instance;
         var parts = new List<string>();
+        if (f.IsFolder) parts.Add(loc["beh.what.folder"]);
         if (f.Created) parts.Add(loc["beh.what.created"]);
         if (f.Writes > 0) parts.Add(loc.Format("beh.what.written", SizeFormatter.Format(f.Bytes, loc.Culture)));
         if (f.Renamed) parts.Add(loc["beh.what.renamed"]);
@@ -676,7 +677,7 @@ public sealed class BehaviorViewModel : ObservableObject
         // In time order: writes to a file are added up and come a moment after what happened around them.
         foreach (var e in report.Events.OrderBy(e => e.TimeUtc))
         {
-            string detail = e.Detail;
+            string detail = e.Detail == KernelEventReader.FolderDetail ? "" : e.Detail;
             if (e.Kind is BehaviorKind.ValueSet or BehaviorKind.ValueDeleted)
             {
                 string name = e.Detail.Length == 0 ? loc["beh.defaultValue"] : e.Detail;
@@ -685,7 +686,9 @@ public sealed class BehaviorViewModel : ObservableObject
             text.AppendLine(string.Join(",", new[]
             {
                 e.TimeUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture),
-                e.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture), ProcessName(e.ProcessId), loc["beh.kind." + e.Kind],
+                e.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture), ProcessName(e.ProcessId),
+                loc["beh.kind." + (e.Detail == KernelEventReader.FolderDetail && e.Kind is BehaviorKind.FileDeleted ? "FolderDeleted"
+                    : e.Detail == KernelEventReader.FolderDetail && e.Kind is BehaviorKind.FileRenamed ? "FolderRenamed" : e.Kind.ToString())],
                 e.Target, detail, e.Size > 0 ? e.Size.ToString(System.Globalization.CultureInfo.InvariantCulture) : "",
             }.Select(Csv)));
         }

@@ -19,6 +19,9 @@ public sealed class KernelEventReader(TrackedProcesses tracked, Func<int, string
     public static readonly Guid NetworkProvider = new("7DD42A49-5329-4832-8DFD-43D979153A88");
     public static readonly Guid DnsProvider = new("1C95126E-7EEA-49A9-A3FE-A378B03DDB4D");
 
+    /// <summary>The <see cref="BehaviorEvent.Detail"/> of a deleted or renamed folder (the same events as for files).</summary>
+    public const string FolderDetail = "folder";
+
     /// <summary>Processes starting and stopping.</summary>
     public const ulong ProcessKeywords = 0x10;
 
@@ -33,6 +36,7 @@ public sealed class KernelEventReader(TrackedProcesses tracked, Func<int, string
 
     private const int MaxObjects = 200_000; // file and key objects remembered; cleared when more, as a long recording could pile them up
     private readonly Dictionary<ulong, string> _files = new();
+    private readonly HashSet<ulong> _folders = new(); // file objects opened as folders
     private readonly Dictionary<ulong, string> _keys = new();
     private readonly Dictionary<(int, ulong), (string Path, long Bytes, DateTime First)> _writes = new();
     private readonly HashSet<(int, string)> _udp = new();
@@ -119,7 +123,15 @@ public sealed class KernelEventReader(TrackedProcesses tracked, Func<int, string
                 uint options = f.U32();
                 f.Skip(8);
                 string name = f.Unicode();
-                if ((options & 1) != 0 || name.Length == 0) return null; // FILE_DIRECTORY_FILE: a folder
+                if (name.Length == 0) return null;
+                if ((options & 1) != 0) // FILE_DIRECTORY_FILE: a folder, remembered to tell a deleted folder from a file
+                {
+                    if (_folders.Count >= MaxObjects) _folders.Clear();
+                    _folders.Add(fileObject);
+                    _files.Remove(fileObject);
+                    return null;
+                }
+                _folders.Remove(fileObject); // the address may have held a folder before
                 Remember(_files, fileObject, name);
                 return id == 30 ? new BehaviorEvent { Kind = BehaviorKind.FileCreated, ProcessId = pid, Target = name, TimeUtc = time } : null;
             }
@@ -138,11 +150,16 @@ public sealed class KernelEventReader(TrackedProcesses tracked, Func<int, string
             }
             case 26 or 27: // DeletePath, RenamePath: Irp, (ThreadId), FileObject, FileKey, ExtraInformation, (IssuingThreadId), InfoClass, FilePath
             {
-                f.Skip(version == 0 ? 40 : 32);
-                f.Skip(version == 0 ? 4 : 8);
+                f.Skip(version == 0 ? 16 : 8);
+                ulong fileObject = f.U64();
+                f.Skip(version == 0 ? 16 + 4 : 16 + 8);
                 string path = f.Unicode();
                 if (path.Length == 0) return null;
-                return new BehaviorEvent { Kind = id == 26 ? BehaviorKind.FileDeleted : BehaviorKind.FileRenamed, ProcessId = pid, Target = path, TimeUtc = time };
+                return new BehaviorEvent
+                {
+                    Kind = id == 26 ? BehaviorKind.FileDeleted : BehaviorKind.FileRenamed, ProcessId = pid, Target = path, TimeUtc = time,
+                    Detail = _folders.Contains(fileObject) ? FolderDetail : "",
+                };
             }
         }
         return null;
