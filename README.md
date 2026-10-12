@@ -23,9 +23,9 @@ shows you exactly what they are, and never deletes anything until you choose to.
   <img src="docs/screenshots/clean-en-light.png" width="760" alt="SweeplyForWindows showing cleanup categories and their sizes">
 </p>
 
-> **Status: preview (0.5).** Cleaning, undo, the "Never clean" list, the folder right-click menu,
-> clean-up reminders, Clean up every day, Disk space, the Monitor page, Capture, background mode and
-> the activity monitor all work.
+> **Status: preview (0.6).** Cleaning, undo, the "Never clean" list, the folder right-click menu,
+> clean-up reminders, Clean up every day, Disk space, the Monitor page, Capture, Behavior, background
+> mode and the activity monitor all work.
 
 ## What it finds
 
@@ -173,6 +173,31 @@ is on): there, and wherever Windows' capture can't start, raw sockets capture, w
 need administrator rights (the page says so). Nothing is sent
 anywhere: a capture stays on this PC unless you save it. Encrypted traffic (HTTPS) stays encrypted:
 you see who talked to whom, when and how much, not what was said.
+
+## See what a program does
+
+<p align="center">
+  <img src="docs/screenshots/behavior-en-light.png" width="760" alt="The Behavior page after recording an installer: the numbers and the changes worth a look">
+</p>
+
+**Behavior** records what a program does while it runs: the processes it starts, the files and
+registry entries it changes, and the addresses it talks to. Choose a running program, or start one
+from the page so it is recorded from its first moment, then use it as usual and stop when you're done.
+Whatever it starts is recorded too.
+
+- **Overview:** how many processes, files, registry changes, addresses and names looked up, the
+  folders with the most changes, and **Worth a look**: autostart entries, Startup folder items,
+  services, scheduled tasks, programs written to disk, a changed hosts file and the like, each with what
+  it means. These are changes worth a look, not signs of harm: installers do them all the time.
+- **Processes, Files, Registry and Network** list the details, with a filter and **Export CSV**.
+- From **Monitor → Connections**, right-click a connection and choose **Record this program's behavior**.
+
+By default it records the processes, their connections and how much they read and write, without
+administrator rights; the names they look up too if your account is in the Performance Log Users group. Tick **Files and registry too** to record those as well: the
+recording then runs in a small helper, which Windows asks you to allow as administrator each time; the
+app itself never runs as administrator. A recording stops when you stop it, when the programs have all
+ended (if you choose), or after 30 minutes or 200,000 events. It only records: nothing is blocked,
+changed or sent anywhere, and it doesn't tell you whether a program is safe.
 
 ## Safety first
 
