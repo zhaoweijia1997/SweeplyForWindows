@@ -82,6 +82,18 @@ public partial class MainWindow : Window
         {
             if (CaptureFileOf(e.Data) is string path) _ = viewModel.Capture.OpenAsync(path);
         };
+        // Behaviour page: the program to start, where to export, and the window UAC prompts belong to.
+        viewModel.Behavior.PickProgram = () =>
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = Localization.Loc.Instance["beh.programFilter"] + " (*.exe)|*.exe" };
+            return dialog.ShowDialog(this) == true ? dialog.FileName : null;
+        };
+        viewModel.Behavior.PickSaveFile = suggested =>
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog { FileName = suggested, DefaultExt = ".csv", Filter = "CSV (*.csv)|*.csv" };
+            return dialog.ShowDialog(this) == true ? dialog.FileName : null;
+        };
+        viewModel.Behavior.OwnerWindow = () => new WindowInteropHelper(this).Handle;
         // When the list of what would be moved opens, keyboard focus goes to "Back", never to the
         // confirm button, so a stray Enter or Space cannot start a clean.
         viewModel.PropertyChanged += (_, e) =>

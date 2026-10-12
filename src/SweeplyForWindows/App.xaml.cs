@@ -98,6 +98,7 @@ public partial class App : Application
         _instance = instance;
         // A capture whose helper was ended by force (with the app, say) left Windows capturing.
         _ = Task.Run(Sweeply.Core.Capture.NdisCaptureSource.StopLeftover);
+        _ = Task.Run(Sweeply.Core.Behavior.BehaviorJob.StopLeftover);
 
         // The app lives in the notification area; closing the window does not end it (unless turned off).
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -278,6 +279,7 @@ public partial class App : Application
         if (_exiting) return;
         _exiting = true;
         _viewModel?.Capture.StopNow(); // closes the pipe; the capture helper ends with it
+        _viewModel?.Behavior.StopNow();
         _monitor?.Dispose();
         _reminder?.Dispose();
         _autoClean?.Dispose();
@@ -411,6 +413,42 @@ internal static class Snapshot
             WaitForAnimations(TimeSpan.FromMilliseconds(900));
             string themeName = theme == ThemeMode.Dark ? "dark" : "light";
             Save(window, theme == ThemeMode.Dark, Path.Combine(folder, $"{name}-{lang}-{themeName}.png"));
+            window.Close();
+        }
+
+        // The Behaviour page with a made-up recording of an installer, each section.
+        foreach (var (lang, theme, section, name) in new[]
+                 {
+                     ("en", ThemeMode.Light, BehaviorViewModel.Overview, "behavior"),
+                     ("zh-Hans", ThemeMode.Light, BehaviorViewModel.Overview, "behavior"),
+                     ("zh-Hans", ThemeMode.Dark, BehaviorViewModel.Overview, "behavior"),
+                     ("en", ThemeMode.Light, BehaviorViewModel.ProcessesSection, "behavior-processes"),
+                     ("zh-Hans", ThemeMode.Light, BehaviorViewModel.ProcessesSection, "behavior-processes"),
+                     ("zh-Hans", ThemeMode.Light, BehaviorViewModel.FilesSection, "behavior-files"),
+                     ("zh-Hans", ThemeMode.Light, BehaviorViewModel.RegistrySection, "behavior-registry"),
+                     ("zh-Hans", ThemeMode.Light, BehaviorViewModel.NetworkSection, "behavior-network"),
+                 })
+        {
+            Loc.Instance.SetLanguage(lang);
+            var vm = new MainViewModel(KnownPaths.FromSystem(), new Settings(), new CleanHistory(null));
+            vm.LoadSample();
+            vm.Behavior.LoadSample();
+            vm.Behavior.SectionIndex = section;
+            vm.PageIndex = MainViewModel.BehaviorPage;
+            var window = new MainWindow(vm, scanOnOpen: false)
+            {
+                ThemeMode = theme,
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -32000,
+                Top = -32000,
+                Width = 1280,
+                Height = 820,
+                ShowInTaskbar = false,
+                ShowActivated = false,
+            };
+            window.Show();
+            WaitForAnimations(TimeSpan.FromMilliseconds(900));
+            Save(window, theme == ThemeMode.Dark, Path.Combine(folder, $"{name}-{lang}-{(theme == ThemeMode.Dark ? "dark" : "light")}.png"));
             window.Close();
         }
 

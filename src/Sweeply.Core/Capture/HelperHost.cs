@@ -14,10 +14,36 @@ public sealed class HelperException(string code, string detail = "") : Exception
     public string Code { get; } = code;
 }
 
+/// <summary>A job the helper does for the app: once started, it hands over finished messages until it is disposed.</summary>
+public interface IHelperJob : IDisposable
+{
+    /// <summary>Starts. Each message goes to <paramref name="message"/> (from any thread); a failure to <paramref name="failed"/>.</summary>
+    void Start(Action<byte[]> message, Action<HelperError> failed);
+
+    /// <summary>The Hello message, once started.</summary>
+    byte[] Hello();
+
+    /// <summary>The counts: what came in, and what was dropped (with <paramref name="droppedByHost"/>, what the host's queue had to drop).</summary>
+    byte[] Stats(long droppedByHost);
+}
+
+/// <summary>Capturing packets, as a helper job.</summary>
+public sealed class PacketJob(IPacketSource source) : IHelperJob
+{
+    public void Start(Action<byte[]> message, Action<HelperError> failed) => source.Start(packet => message(HelperProtocol.EncodePacket(packet)), failed);
+
+    public byte[] Hello() =>
+        HelperProtocol.EncodeJson(HelperMessage.Hello, new HelperHello(source.Backend, source.Interfaces.ToList(), (source as FallbackSource)?.Note));
+
+    public byte[] Stats(long droppedByHost) => HelperProtocol.EncodeStats(source.Received, source.Dropped + droppedByHost);
+
+    public void Dispose() => source.Dispose();
+}
+
 /// <summary>
-/// The helper's end of the pipe. Reads what to do, starts the source, says Hello, then sends the packets and every
-/// second the counts, until the app says stop or goes away, or the source fails (then Error is the last message).
-/// Packets wait in a bounded queue: when the app can't keep up they are dropped and counted, so the helper never
+/// The helper's end of the pipe. Reads what to do, starts the job, says Hello, then sends what the job hands over and
+/// every second the counts, until the app says stop or goes away, or the job fails (then Error is the last message).
+/// Messages wait in a bounded queue: when the app can't keep up they are dropped and counted, so the helper never
 /// piles up memory.
 /// </summary>
 public static class HelperHost
@@ -26,7 +52,10 @@ public static class HelperHost
     public const long QueueBytesLimit = 64L << 20;
     private const int FlushAt = 256 * 1024;
 
-    public static async Task RunAsync(Stream pipe, Func<HelperRequest, IPacketSource> createSource, CancellationToken cancel)
+    public static Task RunAsync(Stream pipe, Func<HelperRequest, IPacketSource> createSource, CancellationToken cancel) =>
+        RunAsync(pipe, request => (IHelperJob)new PacketJob(createSource(request)), cancel);
+
+    public static async Task RunAsync(Stream pipe, Func<HelperRequest, IHelperJob> createJob, CancellationToken cancel)
     {
         HelperRequest? request = null;
         try
@@ -37,22 +66,21 @@ public static class HelperHost
         catch (Exception e) when (e is IOException or InvalidDataException or JsonException or OperationCanceledException) { }
         if (request is null) return;
 
-        IPacketSource source;
-        try { source = createSource(request); }
+        IHelperJob job;
+        try { job = createJob(request); }
         catch (Exception e) when (e is not OperationCanceledException)
         {
             await TrySendAsync(pipe, HelperProtocol.EncodeJson(HelperMessage.Error, ErrorFor(e)), cancel);
             return;
         }
 
-        using (source)
+        using (job)
         {
             var queue = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(QueueLimit) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
             long queuedBytes = 0, dropped = 0;
             HelperError? failure = null;
-            source.Start(packet =>
+            job.Start(message =>
             {
-                var message = HelperProtocol.EncodePacket(packet);
                 if (Interlocked.Add(ref queuedBytes, message.Length) > QueueBytesLimit || !queue.Writer.TryWrite(message))
                 {
                     Interlocked.Add(ref queuedBytes, -message.Length);
@@ -68,8 +96,7 @@ public static class HelperHost
                 await TrySendAsync(pipe, HelperProtocol.EncodeJson(HelperMessage.Error, early), cancel);
                 return;
             }
-            var hello = new HelperHello(source.Backend, source.Interfaces.ToList(), (source as FallbackSource)?.Note);
-            if (!await TrySendAsync(pipe, HelperProtocol.EncodeJson(HelperMessage.Hello, hello), cancel))
+            if (!await TrySendAsync(pipe, job.Hello(), cancel))
                 return;
 
             using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancel);
@@ -77,7 +104,7 @@ public static class HelperHost
             var buffer = new ArrayBufferWriter<byte>(FlushAt * 2);
             long nextStats = Environment.TickCount64 + 1000;
             bool appGone = false;
-            byte[] Stats() => HelperProtocol.EncodeStats(source.Received, source.Dropped + Interlocked.Read(ref dropped));
+            byte[] Stats() => job.Stats(Interlocked.Read(ref dropped));
             try
             {
                 while (!stop.IsCancellationRequested)
@@ -119,9 +146,9 @@ public static class HelperHost
             }
             await watcher;
 
-            // Stop the source first so nothing more comes in and its counts are final, then send what is still
+            // Stop the job first so nothing more comes in and its counts are final, then send what is still
             // queued, the last counts, and why it ended when it failed.
-            source.Dispose();
+            job.Dispose();
             if (appGone) return;
             buffer.ResetWrittenCount();
             while (queue.Reader.TryRead(out var rest))
@@ -193,6 +220,9 @@ public sealed class CaptureConnection : IDisposable
     public HelperHello? Hello { get; private set; }
     public HelperError? Error => _error;
     public ConcurrentQueue<CapturedPacket> Packets { get; } = new();
+
+    /// <summary>Recording behaviour: what the recorded processes did, in order.</summary>
+    public ConcurrentQueue<Behavior.BehaviorEvent> Behavior { get; } = new();
     public long Received => Interlocked.Read(ref _received);
     public long Dropped => Interlocked.Read(ref _dropped);
 
@@ -271,6 +301,9 @@ public sealed class CaptureConnection : IDisposable
                         var packet = HelperProtocol.DecodePacket(m.Payload);
                         PacketArrived?.Invoke(packet);
                         Packets.Enqueue(packet);
+                        break;
+                    case HelperMessage.Behavior:
+                        foreach (var e in HelperProtocol.DecodeJson<List<Behavior.BehaviorEvent>>(m.Payload) ?? new()) Behavior.Enqueue(e);
                         break;
                     case HelperMessage.Stats:
                         var (received, dropped) = HelperProtocol.DecodeStats(m.Payload);

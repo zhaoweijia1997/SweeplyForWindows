@@ -17,6 +17,7 @@ public readonly ref struct EtwEvent
     public long FileTime => Marshal.ReadInt64(_record, 16); // converted to system time by ETW (high resolution clock)
     public Guid Provider => Marshal.PtrToStructure<Guid>(_record + 24);
     public int Id => (ushort)Marshal.ReadInt16(_record, 40);
+    public int Version => Marshal.ReadByte(_record, 42);
     public int Opcode => Marshal.ReadByte(_record, 45);
     public ulong Keyword => (ulong)Marshal.ReadInt64(_record, 48);
     public int UserDataLength => (ushort)Marshal.ReadInt16(_record, 86);
