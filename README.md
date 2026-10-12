@@ -23,9 +23,9 @@ shows you exactly what they are, and never deletes anything until you choose to.
   <img src="docs/screenshots/clean-en-light.png" width="760" alt="SweeplyForWindows showing cleanup categories and their sizes">
 </p>
 
-> **Status: preview (0.4).** Cleaning, undo, the "Never clean" list, the folder right-click menu,
-> clean-up reminders, Clean up every day, Disk space, the Monitor page, background mode and the
-> activity monitor all work.
+> **Status: preview (0.5).** Cleaning, undo, the "Never clean" list, the folder right-click menu,
+> clean-up reminders, Clean up every day, Disk space, the Monitor page, Capture, background mode and
+> the activity monitor all work.
 
 ## What it finds
 
@@ -107,7 +107,7 @@ Downloads and the other personal folders stay, though what is inside them can go
   <img src="docs/screenshots/monitor-en-light.png" width="760" alt="The Monitor page: CPU, memory, disk, network, GPU and temperature, each with a chart of the last 2 minutes">
 </p>
 
-**Monitor** in the sidebar has four parts:
+**Monitor** in the sidebar has five parts:
 
 - **Performance:** CPU (with its speed right now), memory, disk reads and writes, download and upload,
   GPU and the hottest temperature, each with a chart of the last 2 minutes.
@@ -120,6 +120,9 @@ Downloads and the other personal folders stay, though what is inside them can go
 - **Tools:** ping, trace route, and a scan of the local network that lists the devices on it (one
   ping per address plus Windows' own address lookup, so devices that ignore pings show up too; no
   ports are tried).
+- **Connections:** every TCP and UDP connection with the program behind it (and, for svchost.exe, the
+  services it runs), as TCPView shows them: new ones green for a few seconds, closed ones red, then
+  gone.
 
 <p align="center">
   <img src="docs/screenshots/monitor-hardware-en-light.png" width="760" alt="The Hardware part: temperatures, drive health and configuration">
@@ -129,6 +132,47 @@ Everything is read without administrator rights or a driver, and only while the 
 processor's temperature needs a kernel driver, so it isn't shown. Nothing is saved, and the tools send
 packets only when you start them, only to the addresses you choose. They also say when a proxy in TUN
 mode on this PC is answering in place of the real network.
+
+## See what goes over the network
+
+<p align="center">
+  <img src="docs/screenshots/capture-en-light.png" width="760" alt="The Capture page: the packet list, a packet's details and its bytes, as Wireshark shows them">
+</p>
+
+**Capture** shows network traffic packet by packet, the way Wireshark does: the list, each packet's
+details as a tree (protocol names and fields as in Wireshark, so what you look up matches what you
+see) and its bytes.
+
+- **Start capturing** on one network adapter or on all of them. It uses the packet capture built into
+  Windows, so there is nothing to install; with Npcap installed (Wireshark installs it), it uses Npcap
+  instead. Capturing runs in a small helper, which Windows asks you to allow as administrator each time
+  (it doesn't ask if your account is in the Performance Log Users group); the app itself never runs as
+  administrator. Capturing goes on while other pages are open, until you stop it.
+- **The program of each packet**, from the same table the Connections part of Monitor shows. Wireshark
+  can't tell you that.
+- **Open** .pcapng and .pcap files (or drop one on the page), and **save** as .pcapng, with the
+  programs kept as packet comments, which Wireshark shows.
+- **Display filters**, written as in Wireshark: `dns`, `tcp.port == 443`, `ip.addr == 192.0.2.1`,
+  `http || tls`, `!arp`, and `process.name == "chrome.exe"` for a program. Right-click a field to filter
+  on it, or a packet to see only its conversation.
+- **Statistics:** programs, conversations, endpoints, the protocol hierarchy and trouble
+  (retransmissions, resets, failed lookups…, each with what it means), and traffic over time.
+  Addresses get names from the capture itself: the server name a connection asked for, or a DNS
+  answer.
+- **Follow stream** puts a TCP or UDP conversation back together, each end in its own colour.
+
+<p align="center">
+  <img src="docs/screenshots/capture-stats-en-light.png" width="760" alt="Statistics of a capture: the numbers, traffic over time, the busiest programs and the trouble found">
+</p>
+
+Only this PC's own traffic is captured (no promiscuous or Wi-Fi monitor mode), up to 200,000 packets
+or 256 MB at a time. On Wi-Fi, Windows hands over the Wi-Fi frames themselves, already decrypted, and
+they are shown as such. Without Npcap, traffic on the loopback (127.0.0.1) isn't seen. Windows'
+capture doesn't reach a VPN's or a proxy's TUN adapter (where each program's own traffic goes when one
+is on): there, and wherever Windows' capture can't start, raw sockets capture, which see IPv4 only and
+need administrator rights (the page says so). Nothing is sent
+anywhere: a capture stays on this PC unless you save it. Encrypted traffic (HTTPS) stays encrypted:
+you see who talked to whom, when and how much, not what was said.
 
 ## Safety first
 
